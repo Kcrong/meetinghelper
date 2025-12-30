@@ -17,6 +17,7 @@
 		008 /* AWSTranscribeStreaming in Frameworks */ = {isa = PBXBuildFile; productRef = 800 /* AWSTranscribeStreaming */; };
 		009 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* ChatService.swift */; };
 		010 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 801 /* AWSBedrockRuntime */; };
+		011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 110 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 		107 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		108 /* MeetingHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MeetingHelper.entitlements; sourceTree = "<group>"; };
 		109 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+		110 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +67,7 @@
 				107 /* SettingsManager.swift */,
 				109 /* ChatService.swift */,
 				108 /* MeetingHelper.entitlements */,
+				110 /* Assets.xcassets */,
 			);
 			path = MeetingHelper;
 			sourceTree = "<group>";
@@ -86,6 +89,7 @@
 			buildPhases = (
 				410 /* Sources */,
 				200 /* Frameworks */,
+				420 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -101,6 +105,17 @@
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXResourcesBuildPhase section */
+		420 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				011 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXProject section */
 		600 /* Project object */ = {
@@ -154,6 +169,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeetingHelper/MeetingHelper.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -181,6 +197,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeetingHelper/MeetingHelper.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
