@@ -17,7 +17,7 @@
 
 ## 설치
 
-1. [Releases](../../releases)에서 최신 DMG 다운로드
+1. [Releases](../../releases/latest)에서 최신 DMG 다운로드
 2. DMG 열기 → MeetingHelper를 Applications로 드래그
 3. 첫 실행 시: 우클릭 → 열기 (Gatekeeper 우회)
 
