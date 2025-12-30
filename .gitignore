@@ -5,6 +5,7 @@ DerivedData/
 *.xccheckout
 *.xcscmblueprint
 xcuserdata/
+*.xcworkspace/xcuserdata/
 
 # Swift Package Manager
 .build/
@@ -13,6 +14,7 @@ Package.resolved
 
 # macOS
 .DS_Store
+**/.DS_Store
 *.swp
 *~
 
@@ -25,6 +27,16 @@ Package.resolved
 # IDE
 .idea/
 *.code-workspace
+.vscode/
 
-# AI-DLC docs (optional - remove if you want to track)
+# Build artifacts
+*.dmg
+*.app
+*.ipa
+*.dSYM.zip
+
+# Kiro AI (optional - keep for workflow continuity)
+# .kiro/
+
+# AI-DLC docs
 aidlc-docs/
