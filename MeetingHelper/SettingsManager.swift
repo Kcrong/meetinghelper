@@ -6,6 +6,13 @@ struct QuickPrompt: Codable, Identifiable {
     var prompt: String
 }
 
+enum PartialResultsStability: String, CaseIterable {
+    case off = "끔"
+    case low = "Low"
+    case medium = "Medium"
+    case high = "High"
+}
+
 class SettingsManager: ObservableObject {
     @AppStorage("accessKey") var accessKey = ""
     @AppStorage("secretKey") var secretKey = ""
@@ -14,9 +21,19 @@ class SettingsManager: ObservableObject {
     @AppStorage("chatHistoryLimit") var chatHistoryLimit = 20
     @AppStorage("audioInputMode") var audioInputModeRaw = AudioInputMode.both.rawValue
     
+    // MARK: - Transcribe Settings
+    @AppStorage("audioBufferSize") var audioBufferSize = 4096
+    @AppStorage("partialResultsStability") var partialResultsStabilityRaw = PartialResultsStability.off.rawValue
+    @AppStorage("transcribeSampleRate") var transcribeSampleRate = 16000
+    
     var audioInputMode: AudioInputMode {
         get { AudioInputMode(rawValue: audioInputModeRaw) ?? .both }
         set { audioInputModeRaw = newValue.rawValue }
+    }
+    
+    var partialResultsStability: PartialResultsStability {
+        get { PartialResultsStability(rawValue: partialResultsStabilityRaw) ?? .off }
+        set { partialResultsStabilityRaw = newValue.rawValue }
     }
     
     // MARK: - Prompts

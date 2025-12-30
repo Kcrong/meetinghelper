@@ -1,11 +1,17 @@
 import Foundation
 import AWSTranscribeStreaming
 
+struct TranscribeSettings {
+    var sampleRate: Int = 16000
+    var stability: PartialResultsStability = .off
+}
+
 class TranscribeService: ObservableObject {
     private var client: TranscribeStreamingClient?
     private var credentials: AWSCredentials?
     private var continuation: AsyncStream<TranscriptionResult>.Continuation?
     private var isRunning = false
+    var settings = TranscribeSettings()
     
     @MainActor @Published var isConnected = false
     
@@ -29,7 +35,7 @@ class TranscribeService: ObservableObject {
         client = TranscribeStreamingClient(config: config)
         isRunning = true
         
-        print("🔗 [Transcribe] Connecting (region: \(credentials.region), language: \(language))...")
+        print("[MH-TRANSCRIBE] Connecting (region: \(credentials.region), sampleRate: \(settings.sampleRate), stability: \(settings.stability.rawValue))")
         
         let resultStream = AsyncStream<TranscriptionResult> { continuation in
             self.continuation = continuation
@@ -47,24 +53,43 @@ class TranscribeService: ObservableObject {
         guard let client else { return }
         
         do {
-            // 영어 고정 + 화자 분리 + 정확도 개선 옵션
-            print("✅ [Transcribe] Language: en-US, Speaker diarization + Stabilization enabled")
-            let input = StartStreamTranscriptionInput(
-                audioStream: createAudioStream(from: audioStream),
-                enablePartialResultsStabilization: true,
-                languageCode: .enUs,
-                mediaEncoding: .pcm,
-                mediaSampleRateHertz: 16000,
-                partialResultsStability: .high,
-                showSpeakerLabel: true
-            )
+            let input: StartStreamTranscriptionInput
             
-            print("✅ [Transcribe] Starting stream transcription")
+            if settings.stability != .off {
+                let awsStability: TranscribeStreamingClientTypes.PartialResultsStability = {
+                    switch settings.stability {
+                    case .low: return .low
+                    case .medium: return .medium
+                    case .high: return .high
+                    case .off: return .low
+                    }
+                }()
+                
+                input = StartStreamTranscriptionInput(
+                    audioStream: createAudioStream(from: audioStream),
+                    enablePartialResultsStabilization: true,
+                    languageCode: .enUs,
+                    mediaEncoding: .pcm,
+                    mediaSampleRateHertz: settings.sampleRate,
+                    partialResultsStability: awsStability,
+                    showSpeakerLabel: true
+                )
+            } else {
+                input = StartStreamTranscriptionInput(
+                    audioStream: createAudioStream(from: audioStream),
+                    languageCode: .enUs,
+                    mediaEncoding: .pcm,
+                    mediaSampleRateHertz: settings.sampleRate,
+                    showSpeakerLabel: true
+                )
+            }
+            
+            print("[MH-TRANSCRIBE] Starting stream transcription")
             
             let output = try await client.startStreamTranscription(input: input)
             
             guard let transcriptStream = output.transcriptResultStream else {
-                print("❌ [Transcribe] No transcript stream received")
+                print("[MH-TRANSCRIBE] No transcript stream received")
                 return
             }
             

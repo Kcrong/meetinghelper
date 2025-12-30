@@ -176,6 +176,34 @@ struct ContentView: View {
                 }
                 .onAppear { audioManager.refreshMicrophones() }
                 
+                GroupBox("Transcribe 설정") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("버퍼 크기").font(.caption)
+                        Picker("", selection: $settings.audioBufferSize) {
+                            Text("1024 (빠름)").tag(1024)
+                            Text("2048").tag(2048)
+                            Text("4096 (기본)").tag(4096)
+                            Text("8192 (안정)").tag(8192)
+                        }.labelsHidden()
+                        
+                        Text("Partial Results Stability").font(.caption)
+                        Picker("", selection: $settings.partialResultsStabilityRaw) {
+                            ForEach(PartialResultsStability.allCases, id: \.rawValue) { level in
+                                Text(level.rawValue).tag(level.rawValue)
+                            }
+                        }.labelsHidden()
+                        
+                        Text("Sample Rate").font(.caption)
+                        Picker("", selection: $settings.transcribeSampleRate) {
+                            Text("8000 (저대역폭)").tag(8000)
+                            Text("16000 (권장)").tag(16000)
+                            Text("32000 (고품질)").tag(32000)
+                        }.labelsHidden()
+                        
+                        Text("버퍼↓ = 빠름, Stability↑ = 안정적").font(.caption2).foregroundColor(.secondary)
+                    }.padding(.vertical, 4)
+                }
+                
                 GroupBox("AWS Credentials") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Access Key").font(.caption)
@@ -304,6 +332,9 @@ struct ContentView: View {
         
         store.state = .preparing
         transcribeService.configure(credentials: settings.credentials)
+        transcribeService.settings.sampleRate = settings.transcribeSampleRate
+        transcribeService.settings.stability = settings.partialResultsStability
+        audioManager.bufferSize = settings.audioBufferSize
         
         Task {
             do {

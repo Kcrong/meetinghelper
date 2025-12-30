@@ -47,6 +47,8 @@ class AudioCaptureManager: ObservableObject {
         availableMicrophones.isEmpty
     }
     
+    var bufferSize: Int = 4096
+    
     func startCapture(mode: AudioInputMode = .both) async throws -> AsyncStream<Data> {
         refreshMicrophones()
         
@@ -73,7 +75,7 @@ class AudioCaptureManager: ObservableObject {
             }
         }
         
-        print("[MH-AUDIO] Capture mode: \(effectiveMode.rawValue)")
+        print("[MH-AUDIO] Capture mode: \(effectiveMode.rawValue), bufferSize: \(bufferSize)")
         isCapturing = true
         return stream
     }
@@ -115,7 +117,7 @@ class AudioCaptureManager: ObservableObject {
             throw AudioCaptureError.converterCreationFailed
         }
         
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(bufferSize), format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
             let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * 16000 / inputFormat.sampleRate)
             guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
