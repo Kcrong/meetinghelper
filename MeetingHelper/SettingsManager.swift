@@ -36,6 +36,11 @@ class SettingsManager: ObservableObject {
         set { partialResultsStabilityRaw = newValue.rawValue }
     }
     
+    var partialResultsStabilityIndex: Int {
+        get { PartialResultsStability.allCases.firstIndex(of: partialResultsStability) ?? 0 }
+        set { partialResultsStability = PartialResultsStability.allCases[newValue] }
+    }
+    
     // MARK: - Prompts
     @AppStorage("systemPrompt") var systemPrompt = """
 You are a helpful meeting assistant. Answer questions based on the meeting transcription provided.

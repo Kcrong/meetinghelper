@@ -41,8 +41,34 @@ struct ContentView: View {
             HSplitView {
                 // Transcription Panel
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Transcription")
-                        .font(.headline)
+                    HStack {
+                        Text("Transcription").font(.headline)
+                        Spacer()
+                        // Audio Input
+                        Picker("", selection: $settings.audioInputModeRaw) {
+                            ForEach(AudioInputMode.allCases, id: \.rawValue) { mode in
+                                Text(mode.rawValue).tag(mode.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 140)
+                        .disabled(store.state == .recording)
+                        
+                        if settings.audioInputMode != .systemOnly {
+                            Picker("", selection: Binding(
+                                get: { audioManager.selectedMicrophoneID ?? "" },
+                                set: { audioManager.selectedMicrophoneID = $0 }
+                            )) {
+                                ForEach(audioManager.availableMicrophones, id: \.uniqueID) { mic in
+                                    Text(mic.localizedName).tag(mic.uniqueID)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 150)
+                            .disabled(store.state == .recording)
+                        }
+                    }
+                    .onAppear { audioManager.refreshMicrophones() }
                     
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -128,6 +154,14 @@ struct ContentView: View {
                 Spacer()
             }
             
+            // Transcribe Settings (slider style)
+            HStack(spacing: 20) {
+                SliderSetting(label: "버퍼", value: $settings.audioBufferSize, options: [1024, 2048, 4096, 8192], labels: ["1024", "2048", "4096", "8192"], tooltip: "낮음: 빠른 반응, 끊김 가능\n높음: 안정적, 지연 증가")
+                SliderSetting(label: "Stability", value: $settings.partialResultsStabilityIndex, options: [0, 1, 2, 3], labels: ["Off", "Low", "Med", "High"], tooltip: "낮음: 빠른 표시, 텍스트 자주 변경\n높음: 안정적 텍스트, 화자분리 정확도 저하 가능")
+                SliderSetting(label: "Sample", value: $settings.transcribeSampleRate, options: [8000, 16000, 32000], labels: ["8K", "16K", "32K"], tooltip: "낮음: 낮은 대역폭, 음질 저하\n높음: 고음질, 처리량 증가")
+            }
+            .disabled(store.state == .recording)
+            
             if case .error(let message) = store.state {
                 Text(message).foregroundColor(.red).font(.caption)
             }
@@ -148,60 +182,6 @@ struct ContentView: View {
                     Text("Settings").font(.title2.bold())
                     Spacer()
                     Button("Done") { showSettings = false }.buttonStyle(.borderedProminent)
-                }
-                
-                GroupBox("Audio Input") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("입력 소스").font(.caption)
-                        Picker("", selection: $settings.audioInputModeRaw) {
-                            ForEach(AudioInputMode.allCases, id: \.rawValue) { mode in
-                                Text(mode.rawValue).tag(mode.rawValue)
-                            }
-                        }.labelsHidden()
-                        
-                        if settings.audioInputMode != .systemOnly {
-                            Text("마이크").font(.caption)
-                            Picker("", selection: Binding(
-                                get: { audioManager.selectedMicrophoneID ?? "" },
-                                set: { audioManager.selectedMicrophoneID = $0 }
-                            )) {
-                                ForEach(audioManager.availableMicrophones, id: \.uniqueID) { mic in
-                                    Text(mic.localizedName).tag(mic.uniqueID)
-                                }
-                            }.labelsHidden()
-                        }
-                        
-                        Text("시스템만: 유튜브 등 외부 오디오 녹음 시 화자 분리 정확도 향상").font(.caption2).foregroundColor(.secondary)
-                    }.padding(.vertical, 4)
-                }
-                .onAppear { audioManager.refreshMicrophones() }
-                
-                GroupBox("Transcribe 설정") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("버퍼 크기").font(.caption)
-                        Picker("", selection: $settings.audioBufferSize) {
-                            Text("1024 (빠름)").tag(1024)
-                            Text("2048").tag(2048)
-                            Text("4096 (기본)").tag(4096)
-                            Text("8192 (안정)").tag(8192)
-                        }.labelsHidden()
-                        
-                        Text("Partial Results Stability").font(.caption)
-                        Picker("", selection: $settings.partialResultsStabilityRaw) {
-                            ForEach(PartialResultsStability.allCases, id: \.rawValue) { level in
-                                Text(level.rawValue).tag(level.rawValue)
-                            }
-                        }.labelsHidden()
-                        
-                        Text("Sample Rate").font(.caption)
-                        Picker("", selection: $settings.transcribeSampleRate) {
-                            Text("8000 (저대역폭)").tag(8000)
-                            Text("16000 (권장)").tag(16000)
-                            Text("32000 (고품질)").tag(32000)
-                        }.labelsHidden()
-                        
-                        Text("버퍼↓ = 빠름, Stability↑ = 안정적").font(.caption2).foregroundColor(.secondary)
-                    }.padding(.vertical, 4)
                 }
                 
                 GroupBox("AWS Credentials") {
@@ -393,6 +373,50 @@ struct ChatBubble: View {
             }
             
             if message.role == .assistant { Spacer() }
+        }
+    }
+}
+
+// MARK: - Slider Setting Component
+
+struct SliderSetting<T: Hashable>: View {
+    let label: String
+    @Binding var value: T
+    let options: [T]
+    let labels: [String]
+    var tooltip: String = ""
+    @State private var showTooltip = false
+    
+    var body: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 2) {
+                Text(label).font(.caption2).foregroundColor(.secondary)
+                if !tooltip.isEmpty {
+                    Text("?")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .frame(width: 12, height: 12)
+                        .background(Color.gray)
+                        .clipShape(Circle())
+                        .onHover { showTooltip = $0 }
+                        .popover(isPresented: $showTooltip, arrowEdge: .top) {
+                            Text(tooltip).font(.caption).padding(8)
+                        }
+                }
+            }
+            HStack(spacing: 0) {
+                ForEach(Array(zip(options.indices, options)), id: \.0) { index, option in
+                    Button(labels[index]) {
+                        value = option
+                    }
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(value == option ? Color.accentColor : Color.gray.opacity(0.2))
+                    .foregroundColor(value == option ? .white : .primary)
+                }
+            }
+            .cornerRadius(4)
         }
     }
 }
