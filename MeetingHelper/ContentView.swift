@@ -132,7 +132,7 @@ struct ContentView: View {
             
             ScrollViewReader { proxy in
                 ScrollView {
-                    if store.displayText.isEmpty {
+                    if store.segments.isEmpty && store.partialText.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "waveform.badge.mic")
                                 .font(.system(size: 40))
@@ -144,17 +144,40 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.top, 60)
                     } else {
-                        Text(store.displayText)
-                            .font(.system(.body, design: .rounded))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .id("bottom")
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(store.segments) { segment in
+                                TranscriptRow(
+                                    speaker: segment.speaker,
+                                    displayName: segment.speaker.map { store.displayName(for: $0) },
+                                    text: segment.text,
+                                    color: speakerColor(for: segment.speaker)
+                                )
+                            }
+                            
+                            // Partial (typing indicator)
+                            if !store.partialText.isEmpty {
+                                TranscriptRow(
+                                    speaker: store.partialSpeaker,
+                                    displayName: store.partialSpeaker.map { store.displayName(for: $0) },
+                                    text: store.partialText,
+                                    color: speakerColor(for: store.partialSpeaker),
+                                    isPartial: true
+                                )
+                            }
+                        }
+                        .padding(14)
+                        .id("bottom")
                     }
                 }
                 .background(Color(nsColor: .textBackgroundColor))
                 .cornerRadius(12)
                 .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-                .onChange(of: store.displayText) { _ in
+                .onChange(of: store.segments.count) { _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+                .onChange(of: store.partialText) { _ in
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
@@ -166,6 +189,16 @@ struct ContentView: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .frame(minWidth: 300)
+    }
+    
+    private let speakerColors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal]
+    
+    private func speakerColor(for speaker: String?) -> Color {
+        guard let speaker = speaker,
+              let index = store.detectedSpeakers.firstIndex(of: speaker) else {
+            return .gray
+        }
+        return speakerColors[index % speakerColors.count]
     }
     
     // MARK: - Chat Panel
@@ -761,6 +794,47 @@ struct SettingsField<Content: View>: View {
 }
 
 // MARK: - Speaker Management
+
+struct TranscriptRow: View {
+    let speaker: String?
+    let displayName: String?
+    let text: String
+    let color: Color
+    var isPartial: Bool = false
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            // Speaker indicator
+            if let name = displayName {
+                VStack(spacing: 4) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 10, height: 10)
+                    Rectangle()
+                        .fill(color.opacity(0.3))
+                        .frame(width: 2)
+                }
+                .frame(width: 10)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                if let name = displayName {
+                    Text(name)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(color)
+                }
+                
+                Text(text)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(isPartial ? .secondary : .primary)
+                    .opacity(isPartial ? 0.7 : 1)
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
 
 struct SpeakerBar: View {
     @ObservedObject var store: TranscriptionStore
