@@ -125,6 +125,11 @@ struct ContentView: View {
             }
             .onAppear { audioManager.refreshMicrophones() }
             
+            // Speaker management
+            if !store.detectedSpeakers.isEmpty {
+                SpeakerBar(store: store)
+            }
+            
             ScrollViewReader { proxy in
                 ScrollView {
                     if store.displayText.isEmpty {
@@ -751,6 +756,89 @@ struct SettingsField<Content: View>: View {
                 .font(.caption.weight(.medium))
                 .foregroundColor(.secondary)
             content
+        }
+    }
+}
+
+// MARK: - Speaker Management
+
+struct SpeakerBar: View {
+    @ObservedObject var store: TranscriptionStore
+    
+    private let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal]
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(store.detectedSpeakers.enumerated()), id: \.element) { index, speaker in
+                    SpeakerChip(
+                        speaker: speaker,
+                        displayName: store.displayName(for: speaker),
+                        color: colors[index % colors.count],
+                        onRename: { newName in
+                            store.renameSpeaker(speaker, to: newName)
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct SpeakerChip: View {
+    let speaker: String
+    let displayName: String
+    let color: Color
+    let onRename: (String) -> Void
+    
+    @State private var isEditing = false
+    @State private var editName = ""
+    
+    var body: some View {
+        Button(action: { 
+            editName = displayName == speaker ? "" : displayName
+            isEditing = true 
+        }) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                Text(displayName)
+                    .font(.caption.weight(.medium))
+                Image(systemName: "pencil")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .cornerRadius(14)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isEditing) {
+            VStack(spacing: 10) {
+                Text("화자 이름 변경")
+                    .font(.subheadline.weight(.semibold))
+                TextField(speaker, text: $editName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 150)
+                    .onSubmit {
+                        onRename(editName)
+                        isEditing = false
+                    }
+                HStack {
+                    Button("취소") { isEditing = false }
+                        .buttonStyle(.plain)
+                    Button("저장") {
+                        onRename(editName)
+                        isEditing = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(14)
         }
     }
 }

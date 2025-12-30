@@ -163,6 +163,7 @@
 				DEVELOPMENT_TEAM = 8KNF8ZD27M;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -189,6 +190,7 @@
 				DEVELOPMENT_TEAM = 8KNF8ZD27M;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;

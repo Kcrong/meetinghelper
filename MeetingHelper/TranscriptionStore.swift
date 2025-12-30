@@ -6,15 +6,28 @@ class TranscriptionStore: ObservableObject {
     @Published var partialText = ""
     @Published var partialSpeaker: String? = nil
     @Published var state: SessionState = .idle
+    @Published var speakerNames: [String: String] = [:] // spk_0 -> "John"
     
     private var currentSpeaker: String? = nil
+    
+    var detectedSpeakers: [String] {
+        let speakers = Set(segments.compactMap { $0.speaker })
+        return speakers.sorted()
+    }
+    
+    func displayName(for speaker: String) -> String {
+        speakerNames[speaker] ?? speaker
+    }
+    
+    func renameSpeaker(_ speaker: String, to name: String) {
+        speakerNames[speaker] = name.isEmpty ? nil : name
+    }
     
     func appendResult(_ result: TranscriptionResult) {
         if result.isPartial {
             partialText = result.text
             partialSpeaker = result.speakerLabel
         } else {
-            // 같은 화자면 기존 세그먼트에 추가, 다르면 새 세그먼트
             if let speaker = result.speakerLabel, speaker == currentSpeaker, !segments.isEmpty {
                 segments[segments.count - 1].text += " " + result.text
             } else {
@@ -35,19 +48,20 @@ class TranscriptionStore: ObservableObject {
         partialText = ""
         partialSpeaker = nil
         currentSpeaker = nil
+        speakerNames = [:]
     }
     
     var displayText: String {
         var text = segments.map { segment in
             if let speaker = segment.speaker {
-                return "[\(speaker)] \(segment.text)"
+                return "[\(displayName(for: speaker))] \(segment.text)"
             }
             return segment.text
         }.joined(separator: "\n")
         
         if !partialText.isEmpty {
             if let speaker = partialSpeaker {
-                text += "\n[\(speaker)] \(partialText)"
+                text += "\n[\(displayName(for: speaker))] \(partialText)"
             } else {
                 text += "\n\(partialText)"
             }
