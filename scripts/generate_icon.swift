@@ -4,7 +4,8 @@ import Cocoa
 
 func createIcon(size: Int) -> NSImage {
     let image = NSImage(size: NSSize(width: size, height: size))
-    image.lockFocus()
+    
+    image.lockFocusFlipped(false)
     
     let rect = NSRect(x: 0, y: 0, width: size, height: size)
     let cornerRadius = CGFloat(size) * 0.22
@@ -18,8 +19,7 @@ func createIcon(size: Int) -> NSImage {
     gradient.draw(in: path, angle: -45)
     
     // Waveform icon
-    let waveColor = NSColor.white
-    waveColor.setStroke()
+    NSColor.white.setStroke()
     
     let centerY = CGFloat(size) / 2
     let barWidth = CGFloat(size) * 0.08
@@ -43,38 +43,48 @@ func createIcon(size: Int) -> NSImage {
     return image
 }
 
-func saveIcon(image: NSImage, path: String) {
-    guard let tiffData = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiffData),
-          let pngData = bitmap.representation(using: .png, properties: [:]) else {
-        print("Failed to create PNG")
+func saveIcon(image: NSImage, size: Int, path: String) {
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil,
+        pixelsWide: size,
+        pixelsHigh: size,
+        bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bytesPerRow: 0,
+        bitsPerPixel: 0
+    )!
+    
+    rep.size = NSSize(width: size, height: size)
+    
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    image.draw(in: NSRect(x: 0, y: 0, width: size, height: size))
+    NSGraphicsContext.restoreGraphicsState()
+    
+    guard let pngData = rep.representation(using: .png, properties: [:]) else {
+        print("Failed to create PNG for size \(size)")
         return
     }
     
     do {
         try pngData.write(to: URL(fileURLWithPath: path))
-        print("Created: \(path)")
+        print("Created \(size)x\(size): \(path)")
     } catch {
-        print("Error saving \(path): \(error)")
+        print("Error: \(error)")
     }
 }
 
 let basePath = "MeetingHelper/Assets.xcassets/AppIcon.appiconset"
 
-// macOS requires these exact sizes
-let sizes = [
-    ("icon_16.png", 16),
-    ("icon_32.png", 32),
-    ("icon_64.png", 64),
-    ("icon_128.png", 128),
-    ("icon_256.png", 256),
-    ("icon_512.png", 512),
-    ("icon_1024.png", 1024)
-]
+// Exact sizes required by macOS
+let sizes = [16, 32, 64, 128, 256, 512, 1024]
 
-for (filename, size) in sizes {
+for size in sizes {
     let image = createIcon(size: size)
-    saveIcon(image: image, path: "\(basePath)/\(filename)")
+    saveIcon(image: image, size: size, path: "\(basePath)/icon_\(size).png")
 }
 
 print("Done!")
