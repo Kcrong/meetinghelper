@@ -150,6 +150,32 @@ struct ContentView: View {
                     Button("Done") { showSettings = false }.buttonStyle(.borderedProminent)
                 }
                 
+                GroupBox("Audio Input") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("입력 소스").font(.caption)
+                        Picker("", selection: $settings.audioInputModeRaw) {
+                            ForEach(AudioInputMode.allCases, id: \.rawValue) { mode in
+                                Text(mode.rawValue).tag(mode.rawValue)
+                            }
+                        }.labelsHidden()
+                        
+                        if settings.audioInputMode != .systemOnly {
+                            Text("마이크").font(.caption)
+                            Picker("", selection: Binding(
+                                get: { audioManager.selectedMicrophoneID ?? "" },
+                                set: { audioManager.selectedMicrophoneID = $0 }
+                            )) {
+                                ForEach(audioManager.availableMicrophones, id: \.uniqueID) { mic in
+                                    Text(mic.localizedName).tag(mic.uniqueID)
+                                }
+                            }.labelsHidden()
+                        }
+                        
+                        Text("시스템만: 유튜브 등 외부 오디오 녹음 시 화자 분리 정확도 향상").font(.caption2).foregroundColor(.secondary)
+                    }.padding(.vertical, 4)
+                }
+                .onAppear { audioManager.refreshMicrophones() }
+                
                 GroupBox("AWS Credentials") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Access Key").font(.caption)
@@ -281,7 +307,7 @@ struct ContentView: View {
         
         Task {
             do {
-                let audioStream = try await audioManager.startCapture()
+                let audioStream = try await audioManager.startCapture(mode: settings.audioInputMode)
                 let resultStream = try await transcribeService.startTranscription(
                     audioStream: audioStream, language: settings.language
                 )

@@ -12,6 +12,12 @@ class SettingsManager: ObservableObject {
     @AppStorage("region") var region = "us-east-1"
     @AppStorage("language") var language = "ko-KR"
     @AppStorage("chatHistoryLimit") var chatHistoryLimit = 20
+    @AppStorage("audioInputMode") var audioInputModeRaw = AudioInputMode.both.rawValue
+    
+    var audioInputMode: AudioInputMode {
+        get { AudioInputMode(rawValue: audioInputModeRaw) ?? .both }
+        set { audioInputModeRaw = newValue.rawValue }
+    }
     
     // MARK: - Prompts
     @AppStorage("systemPrompt") var systemPrompt = """

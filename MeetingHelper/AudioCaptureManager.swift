@@ -1,5 +1,12 @@
 import AVFoundation
 import ScreenCaptureKit
+import CoreAudio
+
+enum AudioInputMode: String, CaseIterable {
+    case both = "마이크 + 시스템"
+    case micOnly = "마이크만"
+    case systemOnly = "시스템만"
+}
 
 @MainActor
 class AudioCaptureManager: ObservableObject {
@@ -9,21 +16,64 @@ class AudioCaptureManager: ObservableObject {
     private var continuation: AsyncStream<Data>.Continuation?
     
     @Published var isCapturing = false
+    @Published var availableMicrophones: [AVCaptureDevice] = []
+    @Published var selectedMicrophoneID: String?
     
-    func startCapture() async throws -> AsyncStream<Data> {
+    var hasExternalMicrophone: Bool {
+        availableMicrophones.contains { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("내장") }
+    }
+    
+    func refreshMicrophones() {
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInMicrophone, .externalUnknown],
+            mediaType: .audio,
+            position: .unspecified
+        )
+        availableMicrophones = session.devices
+        
+        // 외장 마이크가 있으면 자동 선택
+        if let external = availableMicrophones.first(where: { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("내장") }) {
+            selectedMicrophoneID = external.uniqueID
+            print("[MH-AUDIO] External mic selected: \(external.localizedName)")
+        } else if selectedMicrophoneID == nil, let first = availableMicrophones.first {
+            selectedMicrophoneID = first.uniqueID
+        }
+        
+        print("[MH-AUDIO] Available mics: \(availableMicrophones.map { $0.localizedName })")
+    }
+    
+    /// 마이크가 없으면 true 반환
+    var shouldUseSystemOnly: Bool {
+        availableMicrophones.isEmpty
+    }
+    
+    func startCapture(mode: AudioInputMode = .both) async throws -> AsyncStream<Data> {
+        refreshMicrophones()
+        
+        // 마이크가 없으면 자동으로 시스템만 모드
+        let effectiveMode = shouldUseSystemOnly ? .systemOnly : mode
+        if effectiveMode != mode {
+            print("[MH-AUDIO] No microphone available, switching to system-only mode")
+        }
+        
         let stream = AsyncStream<Data> { continuation in
             self.continuation = continuation
         }
         
-        try await startMicrophoneCapture()
-        
-        do {
-            try await startSystemAudioCapture()
-            print("✅ [Audio] System audio capture started")
-        } catch {
-            print("⚠️ [Audio] System audio not available: \(error.localizedDescription)")
+        if effectiveMode == .micOnly || effectiveMode == .both {
+            try await startMicrophoneCapture()
         }
         
+        if effectiveMode == .systemOnly || effectiveMode == .both {
+            do {
+                try await startSystemAudioCapture()
+                print("[MH-AUDIO] System audio capture started")
+            } catch {
+                print("[MH-AUDIO] System audio not available: \(error.localizedDescription)")
+            }
+        }
+        
+        print("[MH-AUDIO] Capture mode: \(effectiveMode.rawValue)")
         isCapturing = true
         return stream
     }
@@ -41,16 +91,23 @@ class AudioCaptureManager: ObservableObject {
         continuation?.finish()
         continuation = nil
         isCapturing = false
-        print("🛑 [Audio] Capture stopped")
+        print("[MH-AUDIO] Capture stopped")
     }
     
     private func startMicrophoneCapture() async throws {
+        // 선택된 마이크로 시스템 기본 입력 설정
+        if let micID = selectedMicrophoneID,
+           let device = availableMicrophones.first(where: { $0.uniqueID == micID }) {
+            setSystemDefaultInput(deviceUID: micID)
+            print("[MH-AUDIO] Using microphone: \(device.localizedName)")
+        }
+        
         audioEngine = AVAudioEngine()
         guard let audioEngine else { return }
         
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        print("🎤 [Audio] Microphone format: \(inputFormat)")
+        print("[MH-AUDIO] Microphone format: \(inputFormat)")
         
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
         
@@ -76,7 +133,49 @@ class AudioCaptureManager: ObservableObject {
         
         audioEngine.prepare()
         try audioEngine.start()
-        print("✅ [Audio] Microphone capture started")
+        print("[MH-AUDIO] Microphone capture started")
+    }
+    
+    private func setSystemDefaultInput(deviceUID: String) {
+        var deviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var deviceCount: UInt32 = 0
+        AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &deviceCount)
+        let count = Int(deviceCount) / MemoryLayout<AudioDeviceID>.size
+        var devices = [AudioDeviceID](repeating: 0, count: count)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &deviceCount, &devices)
+        
+        for device in devices {
+            var uid: CFString = "" as CFString
+            var uidSize = UInt32(MemoryLayout<CFString>.size)
+            var uidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceUID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectGetPropertyData(device, &uidAddress, 0, nil, &uidSize, &uid)
+            
+            if uid as String == deviceUID {
+                deviceID = device
+                break
+            }
+        }
+        
+        if deviceID != 0 {
+            var defaultAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &defaultAddress, 0, nil, size, &deviceID)
+        }
     }
     
     private func startSystemAudioCapture() async throws {
