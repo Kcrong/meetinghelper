@@ -4,6 +4,7 @@ struct TranscriptionResult {
     let text: String
     let isPartial: Bool
     let timestamp: Date
+    let speakerLabel: String?  // 화자 분리용
 }
 
 struct AudioSettings {

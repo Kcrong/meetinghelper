@@ -18,7 +18,6 @@ class TranscribeService: ObservableObject {
             throw TranscribeError.invalidCredentials
         }
         
-        // 환경 변수로 자격 증명 설정
         setenv("AWS_ACCESS_KEY_ID", credentials.accessKey, 1)
         setenv("AWS_SECRET_ACCESS_KEY", credentials.secretKey, 1)
         setenv("AWS_REGION", credentials.region, 1)
@@ -30,7 +29,7 @@ class TranscribeService: ObservableObject {
         client = TranscribeStreamingClient(config: config)
         isRunning = true
         
-        print("🔗 [Transcribe] Connecting to AWS Transcribe Streaming (region: \(credentials.region))...")
+        print("🔗 [Transcribe] Connecting (region: \(credentials.region), language: \(language))...")
         
         let resultStream = AsyncStream<TranscriptionResult> { continuation in
             self.continuation = continuation
@@ -48,11 +47,16 @@ class TranscribeService: ObservableObject {
         guard let client else { return }
         
         do {
+            // 영어 고정 + 화자 분리 + 정확도 개선 옵션
+            print("✅ [Transcribe] Language: en-US, Speaker diarization + Stabilization enabled")
             let input = StartStreamTranscriptionInput(
                 audioStream: createAudioStream(from: audioStream),
-                languageCode: languageCode(from: language),
+                enablePartialResultsStabilization: true,
+                languageCode: .enUs,
                 mediaEncoding: .pcm,
-                mediaSampleRateHertz: 16000
+                mediaSampleRateHertz: 16000,
+                partialResultsStability: .high,
+                showSpeakerLabel: true
             )
             
             print("✅ [Transcribe] Starting stream transcription")
@@ -66,22 +70,7 @@ class TranscribeService: ObservableObject {
             
             for try await event in transcriptStream {
                 if case .transcriptevent(let transcriptEvent) = event {
-                    if let results = transcriptEvent.transcript?.results {
-                        for result in results {
-                            if let alternatives = result.alternatives, let first = alternatives.first {
-                                let text = first.transcript ?? ""
-                                let isPartial = result.isPartial ?? true
-                                if !text.isEmpty {
-                                    print("📝 [Transcribe] \(isPartial ? "Partial" : "Final"): \(text)")
-                                    continuation?.yield(TranscriptionResult(
-                                        text: text,
-                                        isPartial: isPartial,
-                                        timestamp: Date()
-                                    ))
-                                }
-                            }
-                        }
-                    }
+                    processTranscriptEvent(transcriptEvent)
                 }
             }
             print("✅ [Transcribe] Stream completed")
@@ -91,6 +80,37 @@ class TranscribeService: ObservableObject {
         
         continuation?.finish()
         await MainActor.run { isConnected = false }
+    }
+    
+    private func processTranscriptEvent(_ event: TranscribeStreamingClientTypes.TranscriptEvent) {
+        guard let results = event.transcript?.results else { return }
+        
+        for result in results {
+            guard let alternatives = result.alternatives, let first = alternatives.first else { continue }
+            let text = first.transcript ?? ""
+            let isPartial = result.isPartial ?? true
+            
+            if text.isEmpty { continue }
+            
+            // 화자 라벨 추출
+            var speakerLabel: String? = nil
+            if let items = first.items {
+                let speakers = items.compactMap { $0.speaker }
+                if let mostCommon = speakers.mostCommon() {
+                    speakerLabel = "Speaker \(mostCommon)"
+                }
+            }
+            
+            let prefix = speakerLabel ?? ""
+            print("📝 [Transcribe] \(isPartial ? "Partial" : "Final") \(prefix): \(text)")
+            
+            continuation?.yield(TranscriptionResult(
+                text: text,
+                isPartial: isPartial,
+                timestamp: Date(),
+                speakerLabel: speakerLabel
+            ))
+        }
     }
     
     private func createAudioStream(from audioStream: AsyncStream<Data>) -> AsyncThrowingStream<TranscribeStreamingClientTypes.AudioStream, Error> {
@@ -117,18 +137,18 @@ class TranscribeService: ObservableObject {
         continuation?.finish()
         continuation = nil
         client = nil
-        Task { @MainActor in
-            isConnected = false
-        }
+        Task { @MainActor in isConnected = false }
     }
     
     private func languageCode(from language: String) -> TranscribeStreamingClientTypes.LanguageCode {
-        switch language {
-        case "ko-KR": return .koKr
-        case "en-US": return .enUs
-        case "ja-JP": return .jaJp
-        default: return .koKr
-        }
+        .enUs  // 영어 고정
+    }
+}
+
+private extension Array where Element: Hashable {
+    func mostCommon() -> Element? {
+        let counts = reduce(into: [:]) { $0[$1, default: 0] += 1 }
+        return counts.max(by: { $0.value < $1.value })?.key
     }
 }
 
