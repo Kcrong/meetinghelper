@@ -43,11 +43,11 @@ func createIcon(size: Int) -> NSImage {
     return image
 }
 
-func saveIcon(image: NSImage, size: Int, path: String) {
+func saveIcon(image: NSImage, path: String) {
     guard let tiffData = image.tiffRepresentation,
           let bitmap = NSBitmapImageRep(data: tiffData),
           let pngData = bitmap.representation(using: .png, properties: [:]) else {
-        print("Failed to create PNG for size \(size)")
+        print("Failed to create PNG")
         return
     }
     
@@ -60,11 +60,21 @@ func saveIcon(image: NSImage, size: Int, path: String) {
 }
 
 let basePath = "MeetingHelper/Assets.xcassets/AppIcon.appiconset"
-let sizes = [16, 32, 64, 128, 256, 512, 1024]
 
-for size in sizes {
+// macOS requires these exact sizes
+let sizes = [
+    ("icon_16.png", 16),
+    ("icon_32.png", 32),
+    ("icon_64.png", 64),
+    ("icon_128.png", 128),
+    ("icon_256.png", 256),
+    ("icon_512.png", 512),
+    ("icon_1024.png", 1024)
+]
+
+for (filename, size) in sizes {
     let image = createIcon(size: size)
-    saveIcon(image: image, size: size, path: "\(basePath)/icon_\(size).png")
+    saveIcon(image: image, path: "\(basePath)/\(filename)")
 }
 
 print("Done!")

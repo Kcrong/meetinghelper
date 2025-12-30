@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
     
     steps:
       - name: Checkout
@@ -48,6 +48,19 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+      
+      - name: Verify app icon
+        run: |
+          APP_PATH="build/Build/Products/Release/MeetingHelper.app"
+          echo "Checking app contents..."
+          ls -la "$APP_PATH/Contents/Resources/" || true
+          # Check if icns file exists
+          if [ -f "$APP_PATH/Contents/Resources/AppIcon.icns" ]; then
+            echo "✅ AppIcon.icns found"
+          else
+            echo "⚠️ AppIcon.icns not found, checking for Assets.car..."
+            ls -la "$APP_PATH/Contents/Resources/"*.car 2>/dev/null || echo "No .car files"
+          fi
       
       - name: Create DMG
         run: |
