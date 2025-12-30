@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var chatInput = ""
     @State private var chatHistory: [ChatMessage] = []
+    @State private var isRecordingPulse = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -19,259 +20,474 @@ struct ContentView: View {
                 mainPanel
             }
         }
-        .padding()
-        .frame(minWidth: 600, minHeight: 500)
+        .padding(20)
+        .frame(minWidth: 800, minHeight: 600)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
     
+    // MARK: - Main Panel
     private var mainPanel: some View {
-        VStack(spacing: 12) {
-            // Header
-            HStack {
-                Text("Meeting Helper")
-                    .font(.title2.bold())
-                Spacer()
-                if store.state == .recording {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text("Recording").foregroundColor(.secondary).font(.caption)
-                }
-                Button("Settings") { showSettings = true }
-            }
+        VStack(spacing: 20) {
+            headerView
             
-            // Split view: Transcription (left) + Chat (right)
             HSplitView {
-                // Transcription Panel
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Transcription").font(.headline)
-                        Spacer()
-                        // Audio Input
-                        Picker("", selection: $settings.audioInputModeRaw) {
-                            ForEach(AudioInputMode.allCases, id: \.rawValue) { mode in
-                                Text(mode.rawValue).tag(mode.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 140)
-                        .disabled(store.state == .recording)
-                        
-                        if settings.audioInputMode != .systemOnly {
-                            Picker("", selection: Binding(
-                                get: { audioManager.selectedMicrophoneID ?? "" },
-                                set: { audioManager.selectedMicrophoneID = $0 }
-                            )) {
-                                ForEach(audioManager.availableMicrophones, id: \.uniqueID) { mic in
-                                    Text(mic.localizedName).tag(mic.uniqueID)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 150)
-                            .disabled(store.state == .recording)
-                        }
-                    }
-                    .onAppear { audioManager.refreshMicrophones() }
-                    
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            Text(store.displayText.isEmpty ? "트랜스크립션이 여기에 표시됩니다..." : store.displayText)
-                                .foregroundColor(store.displayText.isEmpty ? .gray : .primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                                .id("bottom")
-                        }
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                        .onChange(of: store.displayText) { _ in
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
-                    }
-                }
-                .frame(minWidth: 250)
-                
-                // Chat Panel
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("AI Assistant")
-                        .font(.headline)
-                    
-                    // Chat history
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 12) {
-                                ForEach(chatHistory) { message in
-                                    ChatBubble(message: message)
-                                }
-                            }
-                            .padding(8)
-                            .id("chatBottom")
-                        }
-                        .background(Color.blue.opacity(0.05))
-                        .cornerRadius(8)
-                        .onChange(of: chatHistory.count) { _ in
-                            proxy.scrollTo("chatBottom", anchor: .bottom)
-                        }
-                    }
-                    
-                    // Quick actions
-                    HStack(spacing: 4) {
-                        ForEach(settings.quickPrompts) { qp in
-                            QuickButton(qp.label) { askQuick(qp.prompt) }
-                        }
-                    }
-                    
-                    // Input
-                    HStack {
-                        TextField("질문을 입력하세요...", text: $chatInput)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit { sendQuestion() }
-                        
-                        Button(action: sendQuestion) {
-                            Image(systemName: chatService.isLoading ? "hourglass" : "paperplane.fill")
-                        }
-                        .disabled(chatInput.isEmpty || chatService.isLoading)
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-                .frame(minWidth: 250)
+                transcriptionPanel
+                chatPanel
             }
             
-            // Controls
-            HStack(spacing: 16) {
-                Button(action: toggleRecording) {
-                    Label(
-                        store.state == .recording ? "Stop" : "Start",
-                        systemImage: store.state == .recording ? "stop.fill" : "mic.fill"
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(store.state == .recording ? .red : .blue)
-                .disabled(store.state == .preparing || store.state == .stopping)
-                
-                Button("Clear All") {
-                    store.clear()
-                    chatHistory.removeAll()
-                }
-                .disabled(store.state == .recording)
-                
-                Spacer()
-            }
-            
-            // Transcribe Settings (slider style)
-            HStack(spacing: 20) {
-                SliderSetting(label: "버퍼", value: $settings.audioBufferSize, options: [1024, 2048, 4096, 8192], labels: ["1024", "2048", "4096", "8192"], tooltip: "낮음: 빠른 반응, 끊김 가능\n높음: 안정적, 지연 증가")
-                SliderSetting(label: "Stability", value: $settings.partialResultsStabilityIndex, options: [0, 1, 2, 3], labels: ["Off", "Low", "Med", "High"], tooltip: "낮음: 빠른 표시, 텍스트 자주 변경\n높음: 안정적 텍스트, 화자분리 정확도 저하 가능")
-                SliderSetting(label: "Sample", value: $settings.transcribeSampleRate, options: [8000, 16000, 32000], labels: ["8K", "16K", "32K"], tooltip: "낮음: 낮은 대역폭, 음질 저하\n높음: 고음질, 처리량 증가")
-            }
-            .disabled(store.state == .recording)
-            
-            if case .error(let message) = store.state {
-                Text(message).foregroundColor(.red).font(.caption)
-            }
+            bottomControls
         }
     }
     
-    private func QuickButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .font(.caption)
-            .buttonStyle(.bordered)
-            .disabled(chatService.isLoading || store.displayText.isEmpty)
+    private var headerView: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(.linearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 36, height: 36)
+                Image(systemName: "waveform")
+                    .font(.body.bold())
+                    .foregroundColor(.white)
+            }
+            
+            Text("Meeting Helper")
+                .font(.title2.bold())
+            
+            Spacer()
+            
+            if store.state == .recording {
+                recordingIndicator
+            }
+            
+            Button(action: { showSettings = true }) {
+                Image(systemName: "gearshape.fill")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
     }
     
+    private var recordingIndicator: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(.red)
+                .frame(width: 10, height: 10)
+                .scaleEffect(isRecordingPulse ? 1.2 : 1.0)
+                .opacity(isRecordingPulse ? 0.7 : 1.0)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isRecordingPulse)
+                .onAppear { isRecordingPulse = true }
+                .onDisappear { isRecordingPulse = false }
+            Text("REC")
+                .font(.caption.bold())
+                .foregroundColor(.red)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.red.opacity(0.15))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Transcription Panel
+    private var transcriptionPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Label("Transcription", systemImage: "text.quote")
+                    .font(.subheadline.weight(.semibold))
+                
+                Spacer()
+                
+                Picker("", selection: $settings.audioInputModeRaw) {
+                    ForEach(AudioInputMode.allCases, id: \.rawValue) { mode in
+                        Text(mode.rawValue).tag(mode.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 130)
+                .disabled(store.state == .recording)
+                
+                if settings.audioInputMode != .systemOnly {
+                    Picker("", selection: Binding(
+                        get: { audioManager.selectedMicrophoneID ?? "" },
+                        set: { audioManager.selectedMicrophoneID = $0 }
+                    )) {
+                        ForEach(audioManager.availableMicrophones, id: \.uniqueID) { mic in
+                            Text(mic.localizedName).tag(mic.uniqueID)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 140)
+                    .disabled(store.state == .recording)
+                }
+            }
+            .onAppear { audioManager.refreshMicrophones() }
+            
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if store.displayText.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "waveform.badge.mic")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Text("트랜스크립션이 여기에 표시됩니다")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 60)
+                    } else {
+                        Text(store.displayText)
+                            .font(.system(.body, design: .rounded))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .id("bottom")
+                    }
+                }
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+                .onChange(of: store.displayText) { _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+        .frame(minWidth: 300)
+    }
+    
+    // MARK: - Chat Panel
+    private var chatPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("AI Assistant", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+            }
+            
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if chatHistory.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Text("AI에게 질문해보세요")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 60)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(chatHistory) { message in
+                                ChatBubble(message: message)
+                            }
+                        }
+                        .padding(14)
+                        .id("chatBottom")
+                    }
+                }
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+                .onChange(of: chatHistory.count) { _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("chatBottom", anchor: .bottom)
+                    }
+                }
+            }
+            
+            // Quick actions
+            HStack(spacing: 8) {
+                ForEach(settings.quickPrompts) { qp in
+                    QuickActionButton(
+                        title: qp.label,
+                        icon: quickActionIcon(for: qp.label),
+                        disabled: chatService.isLoading || store.displayText.isEmpty
+                    ) {
+                        askQuick(qp.prompt)
+                    }
+                }
+            }
+            
+            // Input
+            HStack(spacing: 10) {
+                TextField("질문을 입력하세요...", text: $chatInput)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(10)
+                    .shadow(color: .black.opacity(0.05), radius: 4, y: 1)
+                    .onSubmit { sendQuestion() }
+                
+                Button(action: sendQuestion) {
+                    ZStack {
+                        Circle()
+                            .fill(chatInput.isEmpty || chatService.isLoading ? Color.gray.opacity(0.3) : Color.blue)
+                            .frame(width: 38, height: 38)
+                        
+                        if chatService.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(.body.bold())
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(chatInput.isEmpty || chatService.isLoading)
+            }
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+        .frame(minWidth: 300)
+    }
+    
+    private func quickActionIcon(for label: String) -> String {
+        switch label {
+        case "요약": return "doc.text"
+        case "액션 아이템": return "checklist"
+        case "결정 사항": return "checkmark.seal"
+        default: return "sparkle"
+        }
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControls: some View {
+        HStack(spacing: 16) {
+            // Record Button
+            Button(action: toggleRecording) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(store.state == .recording ? .white.opacity(0.2) : .white.opacity(0.2))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: store.state == .recording ? "stop.fill" : "mic.fill")
+                            .font(.body.bold())
+                    }
+                    Text(store.state == .recording ? "녹음 중지" : "녹음 시작")
+                        .font(.body.weight(.semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    LinearGradient(
+                        colors: store.state == .recording ? [.red, .orange] : [.blue, .purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(25)
+                .shadow(color: (store.state == .recording ? Color.red : Color.blue).opacity(0.4), radius: 8, y: 4)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.state == .preparing || store.state == .stopping)
+            
+            Button(action: {
+                store.clear()
+                chatHistory.removeAll()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                    Text("Clear")
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(20)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.state == .recording)
+            
+            Spacer()
+            
+            // Transcribe Settings
+            HStack(spacing: 16) {
+                CompactSlider(label: "버퍼", value: $settings.audioBufferSize, options: [1024, 2048, 4096, 8192], labels: ["1K", "2K", "4K", "8K"], tooltip: "낮음: 빠른 반응, 끊김 가능\n높음: 안정적, 지연 증가")
+                CompactSlider(label: "Stability", value: $settings.partialResultsStabilityIndex, options: [0, 1, 2, 3], labels: ["Off", "Low", "Med", "High"], tooltip: "낮음: 빠른 표시, 텍스트 자주 변경\n높음: 안정적 텍스트, 화자분리 정확도 저하")
+                CompactSlider(label: "Sample", value: $settings.transcribeSampleRate, options: [8000, 16000, 32000], labels: ["8K", "16K", "32K"], tooltip: "낮음: 낮은 대역폭, 음질 저하\n높음: 고음질, 처리량 증가")
+            }
+            .disabled(store.state == .recording)
+            .opacity(store.state == .recording ? 0.5 : 1)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+    
+    @ViewBuilder
+    private var errorView: some View {
+        if case .error(let message) = store.state {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text(message)
+            }
+            .font(.subheadline)
+            .padding(12)
+            .background(.orange.opacity(0.1))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Settings Panel
     private var settingsPanel: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Text("Settings").font(.title2.bold())
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(.linearGradient(colors: [.gray, .gray.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "gearshape.fill")
+                                .foregroundColor(.white)
+                        }
+                        Text("Settings")
+                            .font(.title2.bold())
+                    }
                     Spacer()
-                    Button("Done") { showSettings = false }.buttonStyle(.borderedProminent)
+                    Button(action: { showSettings = false }) {
+                        Text("Done")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
                 }
                 
-                GroupBox("AWS Credentials") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Access Key").font(.caption)
-                        TextField("AKIA...", text: $settings.accessKey).textFieldStyle(.roundedBorder)
-                        
-                        Text("Secret Key").font(.caption)
-                        SecureField("Secret Key", text: $settings.secretKey).textFieldStyle(.roundedBorder)
-                        
-                        Text("Region (Transcribe)").font(.caption)
-                        Picker("", selection: $settings.region) {
-                            Text("us-east-1").tag("us-east-1")
-                            Text("us-west-2").tag("us-west-2")
-                            Text("ap-northeast-2 (Seoul)").tag("ap-northeast-2")
-                        }.labelsHidden()
-                        
-                        Text("Note: AI Chat uses us-east-1 (Bedrock)").font(.caption2).foregroundColor(.secondary)
-                    }.padding(.vertical, 4)
+                SettingsCard(title: "AWS Credentials", icon: "key.fill", iconColor: .orange) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        SettingsField(label: "Access Key") {
+                            TextField("AKIA...", text: $settings.accessKey)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(Color(nsColor: .textBackgroundColor))
+                                .cornerRadius(8)
+                        }
+                        SettingsField(label: "Secret Key") {
+                            SecureField("Secret Key", text: $settings.secretKey)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(Color(nsColor: .textBackgroundColor))
+                                .cornerRadius(8)
+                        }
+                        SettingsField(label: "Region (Transcribe)") {
+                            Picker("", selection: $settings.region) {
+                                Text("us-east-1").tag("us-east-1")
+                                Text("us-west-2").tag("us-west-2")
+                                Text("ap-northeast-2 (Seoul)").tag("ap-northeast-2")
+                            }.labelsHidden()
+                        }
+                        Label("AI Chat uses us-east-1 (Bedrock)", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                GroupBox("AI Chat") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Chat History Limit").font(.caption)
-                        Picker("", selection: $settings.chatHistoryLimit) {
-                            Text("10 messages").tag(10)
-                            Text("20 messages").tag(20)
-                            Text("50 messages").tag(50)
-                            Text("Unlimited").tag(999)
-                        }.labelsHidden()
-                        Text("More history = better context, but slower & costlier").font(.caption2).foregroundColor(.secondary)
-                    }.padding(.vertical, 4)
+                SettingsCard(title: "AI Chat", icon: "bubble.left.and.bubble.right.fill", iconColor: .blue) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SettingsField(label: "Chat History Limit") {
+                            Picker("", selection: $settings.chatHistoryLimit) {
+                                Text("10 messages").tag(10)
+                                Text("20 messages").tag(20)
+                                Text("50 messages").tag(50)
+                                Text("Unlimited").tag(999)
+                            }.labelsHidden()
+                        }
+                        Label("More history = better context, but slower", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                GroupBox("System Prompt") {
+                SettingsCard(title: "System Prompt", icon: "text.alignleft", iconColor: .purple) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("AI에게 전달되는 기본 지시사항").font(.caption)
+                        Text("AI에게 전달되는 기본 지시사항")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         TextEditor(text: $settings.systemPrompt)
                             .font(.system(.body, design: .monospaced))
-                            .frame(height: 100)
-                            .border(Color.gray.opacity(0.3))
-                    }.padding(.vertical, 4)
+                            .frame(height: 120)
+                            .padding(8)
+                            .background(Color(nsColor: .textBackgroundColor))
+                            .cornerRadius(8)
+                    }
                 }
                 
-                GroupBox("Quick Action Buttons") {
-                    VStack(alignment: .leading, spacing: 8) {
+                SettingsCard(title: "Quick Actions", icon: "bolt.fill", iconColor: .yellow) {
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(settings.quickPrompts.indices, id: \.self) { index in
-                            HStack {
+                            HStack(spacing: 10) {
                                 TextField("이름", text: $settings.quickPrompts[index].label)
-                                    .textFieldStyle(.roundedBorder)
+                                    .textFieldStyle(.plain)
+                                    .padding(8)
+                                    .background(Color(nsColor: .textBackgroundColor))
+                                    .cornerRadius(6)
                                     .frame(width: 80)
                                     .onChange(of: settings.quickPrompts[index].label) { _ in settings.saveQuickPrompts() }
                                 TextField("프롬프트", text: $settings.quickPrompts[index].prompt)
-                                    .textFieldStyle(.roundedBorder)
+                                    .textFieldStyle(.plain)
+                                    .padding(8)
+                                    .background(Color(nsColor: .textBackgroundColor))
+                                    .cornerRadius(6)
                                     .onChange(of: settings.quickPrompts[index].prompt) { _ in settings.saveQuickPrompts() }
                                 Button(action: { settings.deleteQuickPrompt(at: index) }) {
-                                    Image(systemName: "minus.circle.fill").foregroundColor(.red)
-                                }.buttonStyle(.plain)
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.red.opacity(0.7))
+                                        .font(.title3)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         Button(action: { settings.addQuickPrompt() }) {
-                            Label("버튼 추가", systemImage: "plus.circle.fill")
-                        }.buttonStyle(.plain)
-                    }.padding(.vertical, 4)
+                            Label("Add Button", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.blue)
+                    }
                 }
                 
                 Spacer()
             }
+            .padding(4)
         }
     }
     
+    // MARK: - Actions
     private func sendQuestion() {
         guard !chatInput.isEmpty else { return }
         let question = chatInput
         chatInput = ""
         
-        // Add user message
         chatHistory.append(ChatMessage(role: .user, content: question))
-        
-        // Add placeholder for assistant
         let assistantMessage = ChatMessage(role: .assistant, content: "")
         chatHistory.append(assistantMessage)
         let assistantIndex = chatHistory.count - 1
         
-        // Convert chat history for API
         let historyForAPI = chatHistory.dropLast().map { msg in
-            ChatHistoryItem(
-                role: msg.role == .user ? "user" : "assistant",
-                content: msg.content
-            )
+            ChatHistoryItem(role: msg.role == .user ? "user" : "assistant", content: msg.content)
         }
         
         Task {
@@ -341,7 +557,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Chat Models
+// MARK: - Components
 
 struct ChatMessage: Identifiable {
     let id = UUID()
@@ -350,36 +566,110 @@ struct ChatMessage: Identifiable {
     let timestamp = Date()
 }
 
-enum ChatRole {
-    case user, assistant
-}
+enum ChatRole { case user, assistant }
 
 struct ChatBubble: View {
     let message: ChatMessage
     
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: message.timestamp)
+    }
+    
     var body: some View {
-        HStack {
-            if message.role == .user { Spacer() }
+        HStack(alignment: .bottom, spacing: 10) {
+            if message.role == .user { Spacer(minLength: 50) }
             
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                Text(message.role == .user ? "You" : "AI")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                
-                Text(message.content.isEmpty ? "..." : message.content)
-                    .padding(8)
-                    .background(message.role == .user ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
-                    .cornerRadius(8)
+            if message.role == .assistant {
+                ZStack {
+                    Circle()
+                        .fill(.linearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "sparkles")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                }
             }
             
-            if message.role == .assistant { Spacer() }
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+                if message.content.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(0..<3) { i in
+                            Circle()
+                                .fill(Color.gray)
+                                .frame(width: 6, height: 6)
+                                .opacity(0.5)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(16)
+                } else {
+                    Text(message.content)
+                        .font(.system(.body, design: .rounded))
+                        .padding(12)
+                        .background(
+                            message.role == .user
+                            ? AnyShapeStyle(.linearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            : AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+                        )
+                        .foregroundColor(message.role == .user ? .white : .primary)
+                        .cornerRadius(16)
+                }
+                
+                Text(timeString)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            if message.role == .user {
+                ZStack {
+                    Circle()
+                        .fill(.linearGradient(colors: [.green, .teal], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "person.fill")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                }
+            }
+            
+            if message.role == .assistant { Spacer(minLength: 50) }
         }
     }
 }
 
-// MARK: - Slider Setting Component
+struct QuickActionButton: View {
+    let title: String
+    let icon: String
+    let disabled: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(title)
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isHovered ? Color.blue.opacity(0.2) : Color.blue.opacity(0.1))
+            .foregroundColor(.blue)
+            .cornerRadius(8)
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+    }
+}
 
-struct SliderSetting<T: Hashable>: View {
+struct CompactSlider<T: Hashable>: View {
     let label: String
     @Binding var value: T
     let options: [T]
@@ -388,35 +678,79 @@ struct SliderSetting<T: Hashable>: View {
     @State private var showTooltip = false
     
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 2) {
-                Text(label).font(.caption2).foregroundColor(.secondary)
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.secondary)
                 if !tooltip.isEmpty {
-                    Text("?")
+                    Image(systemName: "questionmark.circle.fill")
                         .font(.caption2)
-                        .foregroundColor(.white)
-                        .frame(width: 12, height: 12)
-                        .background(Color.gray)
-                        .clipShape(Circle())
+                        .foregroundColor(.gray)
                         .onHover { showTooltip = $0 }
                         .popover(isPresented: $showTooltip, arrowEdge: .top) {
-                            Text(tooltip).font(.caption).padding(8)
+                            Text(tooltip)
+                                .font(.caption)
+                                .padding(12)
+                                .frame(maxWidth: 200)
                         }
                 }
             }
-            HStack(spacing: 0) {
+            
+            HStack(spacing: 2) {
                 ForEach(Array(zip(options.indices, options)), id: \.0) { index, option in
-                    Button(labels[index]) {
-                        value = option
-                    }
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(value == option ? Color.accentColor : Color.gray.opacity(0.2))
-                    .foregroundColor(value == option ? .white : .primary)
+                    Button(labels[index]) { withAnimation(.easeOut(duration: 0.15)) { value = option } }
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(value == option ? Color.blue : Color.gray.opacity(0.15))
+                        .foregroundColor(value == option ? .white : .secondary)
+                        .cornerRadius(6)
                 }
             }
-            .cornerRadius(4)
+        }
+    }
+}
+
+struct SettingsCard<Content: View>: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(iconColor.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .foregroundColor(iconColor)
+                }
+                Text(title)
+                    .font(.headline)
+            }
+            content
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial)
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+}
+
+struct SettingsField<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.medium))
+                .foregroundColor(.secondary)
+            content
         }
     }
 }

@@ -167,7 +167,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.MeetingHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -193,7 +193,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.MeetingHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";

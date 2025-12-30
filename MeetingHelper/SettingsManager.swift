@@ -22,8 +22,8 @@ class SettingsManager: ObservableObject {
     @AppStorage("audioInputMode") var audioInputModeRaw = AudioInputMode.both.rawValue
     
     // MARK: - Transcribe Settings
-    @AppStorage("audioBufferSize") var audioBufferSize = 4096
-    @AppStorage("partialResultsStability") var partialResultsStabilityRaw = PartialResultsStability.off.rawValue
+    @AppStorage("audioBufferSize") var audioBufferSize = 8192
+    @AppStorage("partialResultsStability") var partialResultsStabilityRaw = PartialResultsStability.low.rawValue
     @AppStorage("transcribeSampleRate") var transcribeSampleRate = 16000
     
     var audioInputMode: AudioInputMode {
