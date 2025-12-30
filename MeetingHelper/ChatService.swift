@@ -22,7 +22,7 @@ class ChatService: ObservableObject {
     }
     
     /// 스트리밍 응답으로 질문에 답변
-    func ask(question: String, transcription: String) -> AsyncStream<String> {
+    func ask(question: String, transcription: String, chatHistory: [ChatHistoryItem] = [], historyLimit: Int = 20, systemPromptTemplate: String? = nil) -> AsyncStream<String> {
         AsyncStream { continuation in
             Task {
                 await MainActor.run { self.isLoading = true }
@@ -34,28 +34,56 @@ class ChatService: ObservableObject {
                     return
                 }
                 
-                let systemPrompt = """
+                let template = systemPromptTemplate ?? """
                 You are a helpful meeting assistant. Answer questions based on the meeting transcription provided.
                 Be concise and direct. If the information is not in the transcription, say so.
                 Respond in the same language as the user's question.
                 """
                 
-                let userMessage = """
+                let systemPrompt = """
+                \(template)
+                
                 Meeting Transcription:
                 ---
-                \(transcription.suffix(8000))
+                \(transcription.suffix(6000))
                 ---
-                
-                Question: \(question)
                 """
+                
+                // Build messages array with chat history (filter and validate)
+                var messages: [[String: String]] = []
+                var lastRole = ""
+                
+                for item in chatHistory.suffix(historyLimit) {
+                    // Skip empty messages and consecutive same roles
+                    if item.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+                    if item.role == lastRole { continue }
+                    messages.append(["role": item.role, "content": item.content])
+                    lastRole = item.role
+                }
+                
+                // Ensure conversation starts with user (Claude requirement)
+                while let first = messages.first, first["role"] == "assistant" {
+                    messages.removeFirst()
+                }
+                
+                // Add current question
+                if lastRole == "user" && !messages.isEmpty {
+                    // If last message was user, we need to remove it or combine
+                    // to avoid consecutive user messages
+                    messages.removeLast()
+                }
+                messages.append(["role": "user", "content": question])
+                
+                print("🔍 [Chat] Sending \(messages.count) messages")
+                for (i, msg) in messages.enumerated() {
+                    print("  [\(i)] \(msg["role"] ?? "?"): \(msg["content"]?.prefix(50) ?? "")...")
+                }
                 
                 let body: [String: Any] = [
                     "anthropic_version": "bedrock-2023-05-31",
                     "max_tokens": 500,
                     "system": systemPrompt,
-                    "messages": [
-                        ["role": "user", "content": userMessage]
-                    ]
+                    "messages": messages
                 ]
                 
                 guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
@@ -97,6 +125,7 @@ class ChatService: ObservableObject {
                     
                 } catch {
                     print("❌ [Chat] Error: \(error)")
+                    print("❌ [Chat] Error details: \(String(describing: error))")
                     continuation.yield("Error: \(error.localizedDescription)")
                 }
                 
@@ -106,11 +135,16 @@ class ChatService: ObservableObject {
     }
     
     /// 비스트리밍 (간단한 요청용)
-    func askSync(question: String, transcription: String) async -> String {
+    func askSync(question: String, transcription: String, chatHistory: [ChatHistoryItem] = [], systemPromptTemplate: String? = nil) async -> String {
         var result = ""
-        for await chunk in ask(question: question, transcription: transcription) {
+        for await chunk in ask(question: question, transcription: transcription, chatHistory: chatHistory, systemPromptTemplate: systemPromptTemplate) {
             result += chunk
         }
         return result
     }
+}
+
+struct ChatHistoryItem {
+    let role: String  // "user" or "assistant"
+    let content: String
 }

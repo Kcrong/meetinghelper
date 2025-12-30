@@ -7,16 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		001 /* MeetingHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101; };
-		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102; };
-		003 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103; };
-		004 /* AudioCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104; };
-		005 /* TranscribeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105; };
-		006 /* TranscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106; };
-		007 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107; };
-		008 /* AWSTranscribeStreaming in Frameworks */ = {isa = PBXBuildFile; productRef = 800; };
-		009 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109; };
-		010 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 801; };
+		001 /* MeetingHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* MeetingHelperApp.swift */; };
+		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
+		003 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Models.swift */; };
+		004 /* AudioCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* AudioCaptureManager.swift */; };
+		005 /* TranscribeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* TranscribeService.swift */; };
+		006 /* TranscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* TranscriptionStore.swift */; };
+		007 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* SettingsManager.swift */; };
+		008 /* AWSTranscribeStreaming in Frameworks */ = {isa = PBXBuildFile; productRef = 800 /* AWSTranscribeStreaming */; };
+		009 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* ChatService.swift */; };
+		010 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 801 /* AWSBedrockRuntime */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,7 +82,7 @@
 /* Begin PBXNativeTarget section */
 		400 /* MeetingHelper */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 500;
+			buildConfigurationList = 500 /* Build configuration list for PBXNativeTarget "MeetingHelper" */;
 			buildPhases = (
 				410 /* Sources */,
 				200 /* Frameworks */,
@@ -93,8 +93,8 @@
 			);
 			name = MeetingHelper;
 			packageProductDependencies = (
-				800,
-				801,
+				800 /* AWSTranscribeStreaming */,
+				801 /* AWSBedrockRuntime */,
 			);
 			productName = MeetingHelper;
 			productReference = 100 /* MeetingHelper.app */;
@@ -110,7 +110,7 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 			};
-			buildConfigurationList = 610;
+			buildConfigurationList = 610 /* Build configuration list for PBXProject "MeetingHelper" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -120,7 +120,7 @@
 			);
 			mainGroup = 300;
 			packageReferences = (
-				900,
+				900 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
 			);
 			productRefGroup = 320 /* Products */;
 			projectDirPath = "";
@@ -156,14 +156,15 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeetingHelper/MeetingHelper.entitlements;
+				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8KNF8ZD27M;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
@@ -181,14 +182,15 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeetingHelper/MeetingHelper.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8KNF8ZD27M;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "마이크를 사용하여 음성을 녹음합니다.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
@@ -233,7 +235,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -272,6 +274,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -302,7 +305,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		900 /* aws-sdk-swift */ = {
+		900 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/awslabs/aws-sdk-swift.git";
 			requirement = {
@@ -315,12 +318,12 @@
 /* Begin XCSwiftPackageProductDependency section */
 		800 /* AWSTranscribeStreaming */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 900;
+			package = 900 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSTranscribeStreaming;
 		};
 		801 /* AWSBedrockRuntime */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 900;
+			package = 900 /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSBedrockRuntime;
 		};
 /* End XCSwiftPackageProductDependency section */

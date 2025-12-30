@@ -9,8 +9,7 @@ struct ContentView: View {
     
     @State private var showSettings = false
     @State private var chatInput = ""
-    @State private var chatResponse = ""
-    @State private var showChat = false
+    @State private var chatHistory: [ChatMessage] = []
     
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +20,7 @@ struct ContentView: View {
             }
         }
         .padding()
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 600, minHeight: 500)
     }
     
     private var mainPanel: some View {
@@ -31,16 +30,81 @@ struct ContentView: View {
                 Text("Meeting Helper")
                     .font(.title2.bold())
                 Spacer()
-                Button(showChat ? "Transcription" : "Ask AI") {
-                    showChat.toggle()
+                if store.state == .recording {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    Text("Recording").foregroundColor(.secondary).font(.caption)
                 }
                 Button("Settings") { showSettings = true }
             }
             
-            if showChat {
-                chatPanel
-            } else {
-                transcriptionPanel
+            // Split view: Transcription (left) + Chat (right)
+            HSplitView {
+                // Transcription Panel
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Transcription")
+                        .font(.headline)
+                    
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            Text(store.displayText.isEmpty ? "트랜스크립션이 여기에 표시됩니다..." : store.displayText)
+                                .foregroundColor(store.displayText.isEmpty ? .gray : .primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .id("bottom")
+                        }
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                        .onChange(of: store.displayText) { _ in
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                }
+                .frame(minWidth: 250)
+                
+                // Chat Panel
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("AI Assistant")
+                        .font(.headline)
+                    
+                    // Chat history
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 12) {
+                                ForEach(chatHistory) { message in
+                                    ChatBubble(message: message)
+                                }
+                            }
+                            .padding(8)
+                            .id("chatBottom")
+                        }
+                        .background(Color.blue.opacity(0.05))
+                        .cornerRadius(8)
+                        .onChange(of: chatHistory.count) { _ in
+                            proxy.scrollTo("chatBottom", anchor: .bottom)
+                        }
+                    }
+                    
+                    // Quick actions
+                    HStack(spacing: 4) {
+                        ForEach(settings.quickPrompts) { qp in
+                            QuickButton(qp.label) { askQuick(qp.prompt) }
+                        }
+                    }
+                    
+                    // Input
+                    HStack {
+                        TextField("질문을 입력하세요...", text: $chatInput)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { sendQuestion() }
+                        
+                        Button(action: sendQuestion) {
+                            Image(systemName: chatService.isLoading ? "hourglass" : "paperplane.fill")
+                        }
+                        .disabled(chatInput.isEmpty || chatService.isLoading)
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .frame(minWidth: 250)
             }
             
             // Controls
@@ -55,76 +119,17 @@ struct ContentView: View {
                 .tint(store.state == .recording ? .red : .blue)
                 .disabled(store.state == .preparing || store.state == .stopping)
                 
-                Button("Clear") { store.clear(); chatResponse = "" }
-                    .disabled(store.state == .recording)
+                Button("Clear All") {
+                    store.clear()
+                    chatHistory.removeAll()
+                }
+                .disabled(store.state == .recording)
                 
                 Spacer()
-                
-                if store.state == .recording {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 8, height: 8)
-                    Text("Recording...")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                }
             }
             
             if case .error(let message) = store.state {
-                Text(message)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-        }
-    }
-    
-    private var transcriptionPanel: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                Text(store.displayText.isEmpty ? "트랜스크립션이 여기에 표시됩니다..." : store.displayText)
-                    .foregroundColor(store.displayText.isEmpty ? .gray : .primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .id("bottom")
-            }
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
-            .onChange(of: store.displayText) { _ in
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-        }
-    }
-    
-    private var chatPanel: some View {
-        VStack(spacing: 8) {
-            // Response area
-            ScrollView {
-                Text(chatResponse.isEmpty ? "AI 응답이 여기에 표시됩니다..." : chatResponse)
-                    .foregroundColor(chatResponse.isEmpty ? .gray : .primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-            }
-            .background(Color.blue.opacity(0.05))
-            .cornerRadius(8)
-            
-            // Input area
-            HStack {
-                TextField("질문을 입력하세요...", text: $chatInput)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { sendQuestion() }
-                
-                Button(action: sendQuestion) {
-                    Image(systemName: chatService.isLoading ? "hourglass" : "paperplane.fill")
-                }
-                .disabled(chatInput.isEmpty || chatService.isLoading)
-                .buttonStyle(.borderedProminent)
-            }
-            
-            // Quick actions
-            HStack(spacing: 8) {
-                QuickButton("요약해줘") { askQuick("지금까지 회의 내용을 간단히 요약해줘") }
-                QuickButton("액션 아이템") { askQuick("회의에서 나온 액션 아이템들을 정리해줘") }
-                QuickButton("결정 사항") { askQuick("회의에서 결정된 사항들을 알려줘") }
+                Text(message).foregroundColor(.red).font(.caption)
             }
         }
     }
@@ -137,44 +142,80 @@ struct ContentView: View {
     }
     
     private var settingsPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Settings")
-                    .font(.title2.bold())
-                Spacer()
-                Button("Done") { showSettings = false }
-                    .buttonStyle(.borderedProminent)
-            }
-            
-            GroupBox("AWS Credentials") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Access Key")
-                        .font(.caption)
-                    TextField("AKIA...", text: $settings.accessKey)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    Text("Secret Key")
-                        .font(.caption)
-                    SecureField("Secret Key", text: $settings.secretKey)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    Text("Region (Transcribe)")
-                        .font(.caption)
-                    Picker("", selection: $settings.region) {
-                        Text("us-east-1").tag("us-east-1")
-                        Text("us-west-2").tag("us-west-2")
-                        Text("ap-northeast-2 (Seoul)").tag("ap-northeast-2")
-                    }
-                    .labelsHidden()
-                    
-                    Text("Note: AI Chat uses us-east-1 (Bedrock)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Settings").font(.title2.bold())
+                    Spacer()
+                    Button("Done") { showSettings = false }.buttonStyle(.borderedProminent)
                 }
-                .padding(.vertical, 4)
+                
+                GroupBox("AWS Credentials") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Access Key").font(.caption)
+                        TextField("AKIA...", text: $settings.accessKey).textFieldStyle(.roundedBorder)
+                        
+                        Text("Secret Key").font(.caption)
+                        SecureField("Secret Key", text: $settings.secretKey).textFieldStyle(.roundedBorder)
+                        
+                        Text("Region (Transcribe)").font(.caption)
+                        Picker("", selection: $settings.region) {
+                            Text("us-east-1").tag("us-east-1")
+                            Text("us-west-2").tag("us-west-2")
+                            Text("ap-northeast-2 (Seoul)").tag("ap-northeast-2")
+                        }.labelsHidden()
+                        
+                        Text("Note: AI Chat uses us-east-1 (Bedrock)").font(.caption2).foregroundColor(.secondary)
+                    }.padding(.vertical, 4)
+                }
+                
+                GroupBox("AI Chat") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Chat History Limit").font(.caption)
+                        Picker("", selection: $settings.chatHistoryLimit) {
+                            Text("10 messages").tag(10)
+                            Text("20 messages").tag(20)
+                            Text("50 messages").tag(50)
+                            Text("Unlimited").tag(999)
+                        }.labelsHidden()
+                        Text("More history = better context, but slower & costlier").font(.caption2).foregroundColor(.secondary)
+                    }.padding(.vertical, 4)
+                }
+                
+                GroupBox("System Prompt") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("AI에게 전달되는 기본 지시사항").font(.caption)
+                        TextEditor(text: $settings.systemPrompt)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 100)
+                            .border(Color.gray.opacity(0.3))
+                    }.padding(.vertical, 4)
+                }
+                
+                GroupBox("Quick Action Buttons") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(settings.quickPrompts.indices, id: \.self) { index in
+                            HStack {
+                                TextField("이름", text: $settings.quickPrompts[index].label)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 80)
+                                    .onChange(of: settings.quickPrompts[index].label) { _ in settings.saveQuickPrompts() }
+                                TextField("프롬프트", text: $settings.quickPrompts[index].prompt)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onChange(of: settings.quickPrompts[index].prompt) { _ in settings.saveQuickPrompts() }
+                                Button(action: { settings.deleteQuickPrompt(at: index) }) {
+                                    Image(systemName: "minus.circle.fill").foregroundColor(.red)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                        Button(action: { settings.addQuickPrompt() }) {
+                            Label("버튼 추가", systemImage: "plus.circle.fill")
+                        }.buttonStyle(.plain)
+                    }.padding(.vertical, 4)
+                }
+                
+                Spacer()
             }
-            
-            Spacer()
         }
     }
     
@@ -182,16 +223,37 @@ struct ContentView: View {
         guard !chatInput.isEmpty else { return }
         let question = chatInput
         chatInput = ""
-        chatResponse = ""
+        
+        // Add user message
+        chatHistory.append(ChatMessage(role: .user, content: question))
+        
+        // Add placeholder for assistant
+        let assistantMessage = ChatMessage(role: .assistant, content: "")
+        chatHistory.append(assistantMessage)
+        let assistantIndex = chatHistory.count - 1
+        
+        // Convert chat history for API
+        let historyForAPI = chatHistory.dropLast().map { msg in
+            ChatHistoryItem(
+                role: msg.role == .user ? "user" : "assistant",
+                content: msg.content
+            )
+        }
         
         Task {
             if !chatService.isConfigured {
                 try? await chatService.configure(credentials: settings.credentials)
             }
             
-            for await chunk in chatService.ask(question: question, transcription: store.displayText) {
+            for await chunk in chatService.ask(
+                question: question,
+                transcription: store.displayText,
+                chatHistory: Array(historyForAPI),
+                historyLimit: settings.chatHistoryLimit,
+                systemPromptTemplate: settings.systemPrompt
+            ) {
                 await MainActor.run {
-                    chatResponse += chunk
+                    chatHistory[assistantIndex].content += chunk
                 }
             }
         }
@@ -203,11 +265,8 @@ struct ContentView: View {
     }
     
     private func toggleRecording() {
-        if store.state == .recording {
-            stopRecording()
-        } else {
-            startRecording()
-        }
+        if store.state == .recording { stopRecording() }
+        else { startRecording() }
     }
     
     private func startRecording() {
@@ -219,29 +278,20 @@ struct ContentView: View {
         
         store.state = .preparing
         transcribeService.configure(credentials: settings.credentials)
-        print("🚀 [App] Starting recording with region: \(settings.region)")
         
         Task {
             do {
                 let audioStream = try await audioManager.startCapture()
-                print("🎤 [App] Audio capture started, connecting to AWS...")
                 let resultStream = try await transcribeService.startTranscription(
-                    audioStream: audioStream,
-                    language: settings.language
+                    audioStream: audioStream, language: settings.language
                 )
-                print("✅ [App] Transcription started")
                 store.state = .recording
                 
                 for await result in resultStream {
-                    await MainActor.run {
-                        store.appendResult(result)
-                    }
+                    await MainActor.run { store.appendResult(result) }
                 }
             } catch {
-                print("❌ [App] Error: \(error)")
-                await MainActor.run {
-                    store.state = .error(error.localizedDescription)
-                }
+                await MainActor.run { store.state = .error(error.localizedDescription) }
             }
         }
     }
@@ -251,5 +301,41 @@ struct ContentView: View {
         audioManager.stopCapture()
         transcribeService.stopTranscription()
         store.state = .idle
+    }
+}
+
+// MARK: - Chat Models
+
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    let role: ChatRole
+    var content: String
+    let timestamp = Date()
+}
+
+enum ChatRole {
+    case user, assistant
+}
+
+struct ChatBubble: View {
+    let message: ChatMessage
+    
+    var body: some View {
+        HStack {
+            if message.role == .user { Spacer() }
+            
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+                Text(message.role == .user ? "You" : "AI")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Text(message.content.isEmpty ? "..." : message.content)
+                    .padding(8)
+                    .background(message.role == .user ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
+                    .cornerRadius(8)
+            }
+            
+            if message.role == .assistant { Spacer() }
+        }
     }
 }
