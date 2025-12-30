@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var isRecordingPulse = false
     @State private var transcriptSearch = ""
     @State private var showTimestamps = false
+    @State private var isTestingCredentials = false
+    @State private var credentialsTestResult: String?
     
     var body: some View {
         ZStack {
@@ -45,7 +47,7 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 800, minHeight: 600)
+        .frame(minWidth: 900, idealWidth: 1100, minHeight: 650, idealHeight: 750)
         .background(Color(nsColor: .windowBackgroundColor))
     }
     
@@ -524,6 +526,30 @@ struct ContentView: View {
                                 Text("ap-northeast-2 (Seoul)").tag("ap-northeast-2")
                             }.labelsHidden()
                         }
+                        
+                        // Test connection button
+                        HStack {
+                            Button(action: { testCredentials() }) {
+                                HStack(spacing: 6) {
+                                    if isTestingCredentials {
+                                        ProgressView().scaleEffect(0.7)
+                                    } else {
+                                        Image(systemName: "checkmark.shield")
+                                    }
+                                    Text("연결 테스트")
+                                }
+                                .font(.subheadline)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isTestingCredentials || !settings.isConfigured)
+                            
+                            if let result = credentialsTestResult {
+                                Text(result)
+                                    .font(.caption)
+                                    .foregroundColor(result.contains("✓") ? .green : .red)
+                            }
+                        }
+                        
                         Label("AI Chat uses us-east-1 (Bedrock)", systemImage: "info.circle")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -652,6 +678,7 @@ struct ContentView: View {
         }
         
         store.state = .preparing
+        transcribeService.lastError = nil
         transcribeService.configure(credentials: settings.credentials)
         transcribeService.settings.sampleRate = settings.transcribeSampleRate
         transcribeService.settings.stability = settings.partialResultsStability
@@ -668,6 +695,15 @@ struct ContentView: View {
                 for await result in resultStream {
                     await MainActor.run { store.appendResult(result) }
                 }
+                
+                // 스트림 종료 후 에러 확인
+                await MainActor.run {
+                    if let error = transcribeService.lastError {
+                        store.state = .error(error)
+                    } else if store.state == .recording {
+                        store.state = .idle
+                    }
+                }
             } catch {
                 await MainActor.run { store.state = .error(error.localizedDescription) }
             }
@@ -679,6 +715,19 @@ struct ContentView: View {
         audioManager.stopCapture()
         transcribeService.stopTranscription()
         store.state = .idle
+    }
+    
+    private func testCredentials() {
+        isTestingCredentials = true
+        credentialsTestResult = nil
+        
+        Task {
+            let result = await settings.validateCredentials()
+            await MainActor.run {
+                credentialsTestResult = result.message
+                isTestingCredentials = false
+            }
+        }
     }
 }
 

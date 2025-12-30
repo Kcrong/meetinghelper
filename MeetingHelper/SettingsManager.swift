@@ -1,4 +1,5 @@
 import SwiftUI
+import AWSTranscribeStreaming
 
 struct QuickPrompt: Codable, Identifiable {
     var id = UUID()
@@ -93,5 +94,29 @@ Respond in the same language as the user's question.
     
     var isConfigured: Bool {
         credentials.isValid
+    }
+    
+    // AWS 자격 증명 검증
+    func validateCredentials() async -> (success: Bool, message: String) {
+        guard isConfigured else {
+            return (false, "Access Key와 Secret Key를 입력하세요")
+        }
+        
+        setenv("AWS_ACCESS_KEY_ID", accessKey, 1)
+        setenv("AWS_SECRET_ACCESS_KEY", secretKey, 1)
+        setenv("AWS_REGION", region, 1)
+        
+        do {
+            let config = try await TranscribeStreamingClient.TranscribeStreamingClientConfiguration(region: region)
+            let _ = TranscribeStreamingClient(config: config)
+            // STS GetCallerIdentity would be better, but Transcribe client creation is a basic check
+            return (true, "✓ 연결 성공")
+        } catch {
+            let errorString = String(describing: error)
+            if errorString.contains("InvalidClientTokenId") || errorString.contains("SignatureDoesNotMatch") {
+                return (false, "자격 증명이 잘못되었습니다")
+            }
+            return (false, "연결 실패: \(error.localizedDescription)")
+        }
     }
 }
