@@ -11,31 +11,66 @@ struct ContentView: View {
     @State private var chatInput = ""
     @State private var chatHistory: [ChatMessage] = []
     @State private var isRecordingPulse = false
+    @State private var transcriptSearch = ""
+    @State private var showTimestamps = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            if showSettings {
-                settingsPanel
-            } else {
-                mainPanel
+        ZStack {
+            VStack(spacing: 0) {
+                if showSettings {
+                    settingsPanel
+                } else {
+                    mainPanel
+                }
+            }
+            .padding(20)
+            
+            // Error toast
+            if case .error(let message) = store.state {
+                VStack {
+                    Spacer()
+                    ErrorToast(message: message) {
+                        store.state = .idle
+                    }
+                    .padding(.bottom, 100)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: store.state)
+            }
+            
+            // Onboarding overlay
+            if !settings.isConfigured && !showSettings {
+                OnboardingOverlay {
+                    showSettings = true
+                }
             }
         }
-        .padding(20)
         .frame(minWidth: 800, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
     }
     
     // MARK: - Main Panel
     private var mainPanel: some View {
-        VStack(spacing: 20) {
-            headerView
+        GeometryReader { geo in
+            let isNarrow = geo.size.width < 700
             
-            HSplitView {
-                transcriptionPanel
-                chatPanel
+            VStack(spacing: 20) {
+                headerView
+                
+                if isNarrow {
+                    VSplitView {
+                        transcriptionPanel
+                        chatPanel
+                    }
+                } else {
+                    HSplitView {
+                        transcriptionPanel
+                        chatPanel
+                    }
+                }
+                
+                bottomControls
             }
-            
-            bottomControls
         }
     }
     
@@ -98,6 +133,28 @@ struct ContentView: View {
                 Label("Transcription", systemImage: "text.quote")
                     .font(.subheadline.weight(.semibold))
                 
+                // Search
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                    TextField("검색", text: $transcriptSearch)
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                }
+                .padding(6)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
+                .frame(width: 100)
+                
+                // Timestamp toggle
+                Button(action: { showTimestamps.toggle() }) {
+                    Image(systemName: "clock")
+                        .foregroundColor(showTimestamps ? .blue : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("타임스탬프 표시")
+                
                 Spacer()
                 
                 Picker("", selection: $settings.audioInputModeRaw) {
@@ -145,17 +202,19 @@ struct ContentView: View {
                         .padding(.top, 60)
                     } else {
                         LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(store.segments) { segment in
+                            ForEach(filteredSegments) { segment in
                                 TranscriptRow(
                                     speaker: segment.speaker,
                                     displayName: segment.speaker.map { store.displayName(for: $0) },
                                     text: segment.text,
-                                    color: speakerColor(for: segment.speaker)
+                                    timestamp: showTimestamps ? segment.timestamp : nil,
+                                    color: speakerColor(for: segment.speaker),
+                                    searchTerm: transcriptSearch
                                 )
                             }
                             
                             // Partial (typing indicator)
-                            if !store.partialText.isEmpty {
+                            if !store.partialText.isEmpty && transcriptSearch.isEmpty {
                                 TranscriptRow(
                                     speaker: store.partialSpeaker,
                                     displayName: store.partialSpeaker.map { store.displayName(for: $0) },
@@ -166,6 +225,7 @@ struct ContentView: View {
                             }
                         }
                         .padding(14)
+                        .textSelection(.enabled)
                         .id("bottom")
                     }
                 }
@@ -189,6 +249,11 @@ struct ContentView: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .frame(minWidth: 300)
+    }
+    
+    private var filteredSegments: [TranscriptionSegment] {
+        guard !transcriptSearch.isEmpty else { return store.segments }
+        return store.segments.filter { $0.text.localizedCaseInsensitiveContains(transcriptSearch) }
     }
     
     private let speakerColors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal]
@@ -226,7 +291,10 @@ struct ContentView: View {
                     } else {
                         LazyVStack(alignment: .leading, spacing: 16) {
                             ForEach(chatHistory) { message in
-                                ChatBubble(message: message)
+                                ChatBubble(message: message, onCopy: {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(message.content, forType: .string)
+                                })
                             }
                         }
                         .padding(14)
@@ -243,20 +311,22 @@ struct ContentView: View {
                 }
             }
             
-            // Quick actions
-            HStack(spacing: 8) {
-                ForEach(settings.quickPrompts) { qp in
-                    QuickActionButton(
-                        title: qp.label,
-                        icon: quickActionIcon(for: qp.label),
-                        disabled: chatService.isLoading || store.displayText.isEmpty
-                    ) {
-                        askQuick(qp.prompt)
+            // Quick actions (scrollable)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(settings.quickPrompts) { qp in
+                        QuickActionButton(
+                            title: qp.label,
+                            icon: quickActionIcon(for: qp.label),
+                            disabled: chatService.isLoading || store.displayText.isEmpty
+                        ) {
+                            askQuick(qp.prompt)
+                        }
                     }
                 }
             }
             
-            // Input
+            // Input + Stop button
             HStack(spacing: 10) {
                 TextField("질문을 입력하세요...", text: $chatInput)
                     .textFieldStyle(.plain)
@@ -266,25 +336,33 @@ struct ContentView: View {
                     .shadow(color: .black.opacity(0.05), radius: 4, y: 1)
                     .onSubmit { sendQuestion() }
                 
-                Button(action: sendQuestion) {
-                    ZStack {
-                        Circle()
-                            .fill(chatInput.isEmpty || chatService.isLoading ? Color.gray.opacity(0.3) : Color.blue)
-                            .frame(width: 38, height: 38)
-                        
-                        if chatService.isLoading {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
+                if chatService.isLoading {
+                    Button(action: { chatService.stopGenerating() }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 38, height: 38)
+                            Image(systemName: "stop.fill")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("응답 중지")
+                } else {
+                    Button(action: sendQuestion) {
+                        ZStack {
+                            Circle()
+                                .fill(chatInput.isEmpty ? Color.gray.opacity(0.3) : Color.blue)
+                                .frame(width: 38, height: 38)
                             Image(systemName: "arrow.up")
                                 .font(.body.bold())
                                 .foregroundColor(.white)
                         }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(chatInput.isEmpty)
                 }
-                .buttonStyle(.plain)
-                .disabled(chatInput.isEmpty || chatService.isLoading)
             }
         }
         .padding(16)
@@ -311,12 +389,19 @@ struct ContentView: View {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(store.state == .recording ? .white.opacity(0.2) : .white.opacity(0.2))
+                            .fill(.white.opacity(0.2))
                             .frame(width: 32, height: 32)
-                        Image(systemName: store.state == .recording ? "stop.fill" : "mic.fill")
-                            .font(.body.bold())
+                        
+                        if store.state == .preparing || store.state == .stopping {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: store.state == .recording ? "stop.fill" : "mic.fill")
+                                .font(.body.bold())
+                        }
                     }
-                    Text(store.state == .recording ? "녹음 중지" : "녹음 시작")
+                    Text(recordButtonText)
                         .font(.body.weight(.semibold))
                 }
                 .foregroundColor(.white)
@@ -324,13 +409,13 @@ struct ContentView: View {
                 .padding(.vertical, 12)
                 .background(
                     LinearGradient(
-                        colors: store.state == .recording ? [.red, .orange] : [.blue, .purple],
+                        colors: recordButtonColors,
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .cornerRadius(25)
-                .shadow(color: (store.state == .recording ? Color.red : Color.blue).opacity(0.4), radius: 8, y: 4)
+                .shadow(color: recordButtonColors[0].opacity(0.4), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
             .disabled(store.state == .preparing || store.state == .stopping)
@@ -370,18 +455,20 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
     
-    @ViewBuilder
-    private var errorView: some View {
-        if case .error(let message) = store.state {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                Text(message)
-            }
-            .font(.subheadline)
-            .padding(12)
-            .background(.orange.opacity(0.1))
-            .cornerRadius(10)
+    private var recordButtonText: String {
+        switch store.state {
+        case .preparing: return "준비 중..."
+        case .stopping: return "중지 중..."
+        case .recording: return "녹음 중지"
+        default: return "녹음 시작"
+        }
+    }
+    
+    private var recordButtonColors: [Color] {
+        switch store.state {
+        case .preparing, .stopping: return [.gray, .gray.opacity(0.7)]
+        case .recording: return [.red, .orange]
+        default: return [.blue, .purple]
         }
     }
     
@@ -608,6 +695,7 @@ enum ChatRole { case user, assistant }
 
 struct ChatBubble: View {
     let message: ChatMessage
+    var onCopy: () -> Void = {}
     
     private var timeString: String {
         let formatter = DateFormatter()
@@ -644,16 +732,31 @@ struct ChatBubble: View {
                     .background(Color(nsColor: .controlBackgroundColor))
                     .cornerRadius(16)
                 } else {
-                    Text(message.content)
-                        .font(.system(.body, design: .rounded))
-                        .padding(12)
-                        .background(
-                            message.role == .user
-                            ? AnyShapeStyle(.linearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            : AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
-                        )
-                        .foregroundColor(message.role == .user ? .white : .primary)
-                        .cornerRadius(16)
+                    HStack(alignment: .top, spacing: 6) {
+                        if message.role == .user { Spacer(minLength: 0) }
+                        
+                        Text(message.content)
+                            .font(.system(.body, design: .rounded))
+                            .textSelection(.enabled)
+                            .padding(12)
+                            .background(
+                                message.role == .user
+                                ? AnyShapeStyle(.linearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                : AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+                            )
+                            .foregroundColor(message.role == .user ? .white : .primary)
+                            .cornerRadius(16)
+                        
+                        if message.role == .assistant && !message.content.isEmpty {
+                            Button(action: onCopy) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("복사")
+                        }
+                    }
                 }
                 
                 Text(timeString)
@@ -799,13 +902,30 @@ struct TranscriptRow: View {
     let speaker: String?
     let displayName: String?
     let text: String
+    var timestamp: Date? = nil
     let color: Color
     var isPartial: Bool = false
+    var searchTerm: String = ""
+    
+    private var timeString: String {
+        guard let ts = timestamp else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: ts)
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Timestamp
+            if timestamp != nil {
+                Text(timeString)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(.secondary)
+                    .frame(width: 55, alignment: .leading)
+            }
+            
             // Speaker indicator
-            if let name = displayName {
+            if displayName != nil {
                 VStack(spacing: 4) {
                     Circle()
                         .fill(color)
@@ -824,15 +944,43 @@ struct TranscriptRow: View {
                         .foregroundColor(color)
                 }
                 
-                Text(text)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundColor(isPartial ? .secondary : .primary)
-                    .opacity(isPartial ? 0.7 : 1)
+                if searchTerm.isEmpty {
+                    Text(text)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundColor(isPartial ? .secondary : .primary)
+                        .opacity(isPartial ? 0.7 : 1)
+                } else {
+                    HighlightedText(text: text, highlight: searchTerm)
+                        .font(.system(.body, design: .rounded))
+                }
             }
             
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct HighlightedText: View {
+    let text: String
+    let highlight: String
+    
+    var body: some View {
+        highlightedAttributedText
+    }
+    
+    private var highlightedAttributedText: some View {
+        var result = Text("")
+        var remaining = text[...]
+        
+        while let range = remaining.range(of: highlight, options: .caseInsensitive) {
+            let before = remaining[..<range.lowerBound]
+            let match = remaining[range]
+            result = result + Text(before) + Text(match).bold().foregroundColor(.orange)
+            remaining = remaining[range.upperBound...]
+        }
+        result = result + Text(remaining)
+        return result
     }
 }
 
@@ -913,6 +1061,89 @@ struct SpeakerChip: View {
                 }
             }
             .padding(14)
+        }
+    }
+}
+
+
+// MARK: - Error Toast
+
+struct ErrorToast: View {
+    let message: String
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("오류 발생")
+                    .font(.subheadline.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            
+            Spacer()
+            
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .frame(maxWidth: 400)
+    }
+}
+
+// MARK: - Onboarding Overlay
+
+struct OnboardingOverlay: View {
+    let onOpenSettings: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 24) {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 50))
+                    .foregroundStyle(.linearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing))
+                
+                Text("AWS 자격 증명 필요")
+                    .font(.title2.bold())
+                
+                Text("Meeting Helper를 사용하려면\nAWS Access Key와 Secret Key가 필요합니다.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Button(action: onOpenSettings) {
+                    HStack {
+                        Image(systemName: "gearshape.fill")
+                        Text("설정으로 이동")
+                    }
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.blue)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(40)
+            .background(.ultraThinMaterial)
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
         }
     }
 }

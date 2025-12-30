@@ -5,11 +5,18 @@ class ChatService: ObservableObject {
     private var bedrockClient: BedrockRuntimeClient?
     private let modelId = "anthropic.claude-3-haiku-20240307-v1:0"
     private let region = "us-east-1"
+    private var currentTask: Task<Void, Never>?
     
     @MainActor @Published var isLoading = false
     @MainActor @Published var lastResponse = ""
     
     var isConfigured: Bool { bedrockClient != nil }
+    
+    func stopGenerating() {
+        currentTask?.cancel()
+        currentTask = nil
+        Task { @MainActor in isLoading = false }
+    }
     
     func configure(credentials: AWSCredentials) async throws {
         setenv("AWS_ACCESS_KEY_ID", credentials.accessKey, 1)
@@ -24,7 +31,7 @@ class ChatService: ObservableObject {
     /// 스트리밍 응답으로 질문에 답변
     func ask(question: String, transcription: String, chatHistory: [ChatHistoryItem] = [], historyLimit: Int = 20, systemPromptTemplate: String? = nil) -> AsyncStream<String> {
         AsyncStream { continuation in
-            Task {
+            let task = Task {
                 await MainActor.run { self.isLoading = true }
                 defer { Task { @MainActor in self.isLoading = false } }
                 
@@ -110,6 +117,10 @@ class ChatService: ObservableObject {
                     var fullResponse = ""
                     
                     for try await event in stream {
+                        if Task.isCancelled {
+                            continuation.finish()
+                            return
+                        }
                         if case .chunk(let payload) = event,
                            let data = payload.bytes,
                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -124,6 +135,10 @@ class ChatService: ObservableObject {
                     print("✅ [Chat] Response complete: \(fullResponse.prefix(50))...")
                     
                 } catch {
+                    if Task.isCancelled { 
+                        continuation.finish()
+                        return 
+                    }
                     print("❌ [Chat] Error: \(error)")
                     print("❌ [Chat] Error details: \(String(describing: error))")
                     continuation.yield("Error: \(error.localizedDescription)")
@@ -131,6 +146,7 @@ class ChatService: ObservableObject {
                 
                 continuation.finish()
             }
+            self.currentTask = task
         }
     }
     
