@@ -1,0 +1,30 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Credentials / Secrets
+.env
+*.pem
+*.p12
+*.key
+
+# IDE
+.idea/
+*.code-workspace
+
+# AI-DLC docs (optional - remove if you want to track)
+aidlc-docs/
