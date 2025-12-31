@@ -19,7 +19,7 @@ Real-time meeting transcription and AI assistant for macOS.
 
 ### Homebrew (Recommended)
 ```bash
-brew tap kcrong/meetinghelper
+brew tap kcrong/meetinghelper https://github.com/kcrong/meetinghelper --branch homebrew
 brew install --cask meeting-helper
 ```
 

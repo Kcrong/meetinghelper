@@ -69,20 +69,24 @@ jobs:
           VERSION=$(date +'%Y.%m.%d')-$(echo ${{ github.sha }} | cut -c1-7)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
-      - name: Update Cask
+      - name: Update Cask in homebrew branch
         run: |
           SHA256=$(shasum -a 256 MeetingHelper.dmg | awk '{print $1}')
           VERSION=${{ steps.version.outputs.version }}
+          
+          git fetch origin homebrew
+          git checkout homebrew
+          
           sed -i '' "s/version \".*\"/version \"$VERSION\"/" Casks/meeting-helper.rb
           sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" Casks/meeting-helper.rb
-      
-      - name: Commit Cask update
-        run: |
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/meeting-helper.rb
-          git diff --staged --quiet || git commit -m "chore: Update Cask to v${{ steps.version.outputs.version }}"
-          git push
+          git diff --staged --quiet || git commit -m "chore: Update Cask to v$VERSION"
+          git push origin homebrew
+          
+          git checkout main
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
