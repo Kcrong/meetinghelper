@@ -679,12 +679,25 @@ struct ContentView: View {
         
         store.state = .preparing
         transcribeService.lastError = nil
-        transcribeService.configure(credentials: settings.credentials)
-        transcribeService.settings.sampleRate = settings.transcribeSampleRate
-        transcribeService.settings.stability = settings.partialResultsStability
-        audioManager.bufferSize = settings.audioBufferSize
         
         Task {
+            // AWS 자격 증명 검증
+            let validationResult = await settings.validateCredentials()
+            if !validationResult.success {
+                await MainActor.run {
+                    store.state = .error("AWS 자격 증명 오류: \(validationResult.message)")
+                    showSettings = true
+                }
+                return
+            }
+            
+            await MainActor.run {
+                transcribeService.configure(credentials: settings.credentials)
+                transcribeService.settings.sampleRate = settings.transcribeSampleRate
+                transcribeService.settings.stability = settings.partialResultsStability
+                audioManager.bufferSize = settings.audioBufferSize
+            }
+            
             do {
                 let audioStream = try await audioManager.startCapture(mode: settings.audioInputMode)
                 let resultStream = try await transcribeService.startTranscription(

@@ -1,5 +1,6 @@
 import SwiftUI
 import AWSTranscribeStreaming
+import AWSBedrockRuntime
 
 struct QuickPrompt: Codable, Identifiable {
     var id = UUID()
@@ -106,17 +107,55 @@ Respond in the same language as the user's question.
         setenv("AWS_SECRET_ACCESS_KEY", secretKey, 1)
         setenv("AWS_REGION", region, 1)
         
+        // Transcribe 검증
         do {
-            let config = try await TranscribeStreamingClient.TranscribeStreamingClientConfiguration(region: region)
-            let _ = TranscribeStreamingClient(config: config)
-            // STS GetCallerIdentity would be better, but Transcribe client creation is a basic check
-            return (true, "✓ 연결 성공")
+            let transcribeConfig = try await TranscribeStreamingClient.TranscribeStreamingClientConfiguration(region: region)
+            let transcribeClient = TranscribeStreamingClient(config: transcribeConfig)
+            
+            // 실제 스트림 시작 시도 (빈 오디오로 즉시 종료)
+            let emptyStream = AsyncThrowingStream<TranscribeStreamingClientTypes.AudioStream, Error> { $0.finish() }
+            let input = StartStreamTranscriptionInput(
+                audioStream: emptyStream,
+                languageCode: .enUs,
+                mediaEncoding: .pcm,
+                mediaSampleRateHertz: 16000
+            )
+            _ = try await transcribeClient.startStreamTranscription(input: input)
         } catch {
-            let errorString = String(describing: error)
-            if errorString.contains("InvalidClientTokenId") || errorString.contains("SignatureDoesNotMatch") {
-                return (false, "자격 증명이 잘못되었습니다")
-            }
-            return (false, "연결 실패: \(error.localizedDescription)")
+            return (false, "Transcribe 오류: \(parseError(error))")
         }
+        
+        // Bedrock 검증
+        do {
+            let bedrockConfig = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: "us-east-1")
+            let bedrockClient = BedrockRuntimeClient(config: bedrockConfig)
+            
+            let payload: [String: Any] = [
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1,
+                "messages": [["role": "user", "content": "hi"]]
+            ]
+            let body = try JSONSerialization.data(withJSONObject: payload)
+            let input = InvokeModelInput(body: body, modelId: "anthropic.claude-3-haiku-20240307-v1:0")
+            _ = try await bedrockClient.invokeModel(input: input)
+        } catch {
+            return (false, "Bedrock 오류: \(parseError(error))")
+        }
+        
+        return (true, "✓ Transcribe, Bedrock 연결 성공")
+    }
+    
+    private func parseError(_ error: Error) -> String {
+        let errorString = String(describing: error)
+        if errorString.contains("InvalidClientTokenId") || errorString.contains("UnrecognizedClientException") {
+            return "Access Key가 유효하지 않습니다"
+        } else if errorString.contains("SignatureDoesNotMatch") {
+            return "Secret Key가 잘못되었습니다"
+        } else if errorString.contains("AccessDenied") {
+            return "권한이 없습니다. IAM 정책을 확인하세요"
+        } else if errorString.contains("ExpiredToken") {
+            return "자격 증명이 만료되었습니다"
+        }
+        return error.localizedDescription
     }
 }

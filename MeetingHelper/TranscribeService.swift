@@ -21,7 +21,7 @@ class TranscribeService: ObservableObject {
     }
     
     func startTranscription(audioStream: AsyncStream<Data>, language: String) async throws -> AsyncStream<TranscriptionResult> {
-        guard let credentials, credentials.isValid else {
+        guard let credentials else {
             throw TranscribeError.invalidCredentials
         }
         
