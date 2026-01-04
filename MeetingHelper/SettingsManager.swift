@@ -9,7 +9,7 @@ struct QuickPrompt: Codable, Identifiable {
 }
 
 enum PartialResultsStability: String, CaseIterable {
-    case off = "끔"
+    case off = "Off"
     case low = "Low"
     case medium = "Medium"
     case high = "High"
@@ -54,9 +54,9 @@ Respond in the same language as the user's question.
     
     private let quickPromptsKey = "quickPrompts"
     private static let defaultQuickPrompts = [
-        QuickPrompt(label: "요약", prompt: "지금까지 회의 내용을 간단히 요약해줘"),
-        QuickPrompt(label: "액션 아이템", prompt: "회의에서 나온 액션 아이템들을 정리해줘"),
-        QuickPrompt(label: "결정 사항", prompt: "회의에서 결정된 사항들을 알려줘")
+        QuickPrompt(label: "Summary", prompt: "Summarize the meeting so far"),
+        QuickPrompt(label: "Action Items", prompt: "List the action items from the meeting"),
+        QuickPrompt(label: "Decisions", prompt: "What decisions were made in the meeting?")
     ]
     
     init() {
@@ -79,7 +79,7 @@ Respond in the same language as the user's question.
     }
     
     func addQuickPrompt() {
-        quickPrompts.append(QuickPrompt(label: "새 버튼", prompt: ""))
+        quickPrompts.append(QuickPrompt(label: "New Button", prompt: ""))
         saveQuickPrompts()
     }
     
@@ -97,22 +97,22 @@ Respond in the same language as the user's question.
         credentials.isValid
     }
     
-    // AWS 자격 증명 검증
+    // Validate AWS credentials
     func validateCredentials() async -> (success: Bool, message: String) {
         guard isConfigured else {
-            return (false, "Access Key와 Secret Key를 입력하세요")
+            return (false, "Please enter Access Key and Secret Key")
         }
         
         setenv("AWS_ACCESS_KEY_ID", accessKey, 1)
         setenv("AWS_SECRET_ACCESS_KEY", secretKey, 1)
         setenv("AWS_REGION", region, 1)
         
-        // Transcribe 검증
+        // Validate Transcribe
         do {
             let transcribeConfig = try await TranscribeStreamingClient.TranscribeStreamingClientConfiguration(region: region)
             let transcribeClient = TranscribeStreamingClient(config: transcribeConfig)
             
-            // 실제 스트림 시작 시도 (빈 오디오로 즉시 종료)
+            // Try starting a stream (empty audio, immediately finish)
             let emptyStream = AsyncThrowingStream<TranscribeStreamingClientTypes.AudioStream, Error> { $0.finish() }
             let input = StartStreamTranscriptionInput(
                 audioStream: emptyStream,
@@ -122,10 +122,10 @@ Respond in the same language as the user's question.
             )
             _ = try await transcribeClient.startStreamTranscription(input: input)
         } catch {
-            return (false, "Transcribe 오류: \(parseError(error))")
+            return (false, "Transcribe error: \(parseError(error))")
         }
         
-        // Bedrock 검증
+        // Validate Bedrock
         do {
             let bedrockConfig = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: "us-east-1")
             let bedrockClient = BedrockRuntimeClient(config: bedrockConfig)
@@ -139,22 +139,22 @@ Respond in the same language as the user's question.
             let input = InvokeModelInput(body: body, modelId: "anthropic.claude-3-haiku-20240307-v1:0")
             _ = try await bedrockClient.invokeModel(input: input)
         } catch {
-            return (false, "Bedrock 오류: \(parseError(error))")
+            return (false, "Bedrock error: \(parseError(error))")
         }
         
-        return (true, "✓ Transcribe, Bedrock 연결 성공")
+        return (true, "✓ Transcribe, Bedrock connection successful")
     }
     
     private func parseError(_ error: Error) -> String {
         let errorString = String(describing: error)
         if errorString.contains("InvalidClientTokenId") || errorString.contains("UnrecognizedClientException") {
-            return "Access Key가 유효하지 않습니다"
+            return "Invalid Access Key"
         } else if errorString.contains("SignatureDoesNotMatch") {
-            return "Secret Key가 잘못되었습니다"
+            return "Invalid Secret Key"
         } else if errorString.contains("AccessDenied") {
-            return "권한이 없습니다. IAM 정책을 확인하세요"
+            return "Access denied. Check IAM policy"
         } else if errorString.contains("ExpiredToken") {
-            return "자격 증명이 만료되었습니다"
+            return "Credentials expired"
         }
         return error.localizedDescription
     }

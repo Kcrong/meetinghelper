@@ -3,9 +3,9 @@ import ScreenCaptureKit
 import CoreAudio
 
 enum AudioInputMode: String, CaseIterable {
-    case both = "마이크 + 시스템"
-    case micOnly = "마이크만"
-    case systemOnly = "시스템만"
+    case both = "Mic + System"
+    case micOnly = "Mic Only"
+    case systemOnly = "System Only"
 }
 
 @MainActor
@@ -20,7 +20,7 @@ class AudioCaptureManager: ObservableObject {
     @Published var selectedMicrophoneID: String?
     
     var hasExternalMicrophone: Bool {
-        availableMicrophones.contains { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("내장") }
+        availableMicrophones.contains { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("Built-in") }
     }
     
     func refreshMicrophones() {
@@ -31,8 +31,8 @@ class AudioCaptureManager: ObservableObject {
         )
         availableMicrophones = session.devices
         
-        // 외장 마이크가 있으면 자동 선택
-        if let external = availableMicrophones.first(where: { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("내장") }) {
+        // Auto-select external mic if available
+        if let external = availableMicrophones.first(where: { !$0.localizedName.contains("MacBook") && !$0.localizedName.contains("Built-in") }) {
             selectedMicrophoneID = external.uniqueID
             print("[MH-AUDIO] External mic selected: \(external.localizedName)")
         } else if selectedMicrophoneID == nil, let first = availableMicrophones.first {
@@ -42,7 +42,7 @@ class AudioCaptureManager: ObservableObject {
         print("[MH-AUDIO] Available mics: \(availableMicrophones.map { $0.localizedName })")
     }
     
-    /// 마이크가 없으면 true 반환
+    /// Returns true if no microphone available
     var shouldUseSystemOnly: Bool {
         availableMicrophones.isEmpty
     }
@@ -52,7 +52,7 @@ class AudioCaptureManager: ObservableObject {
     func startCapture(mode: AudioInputMode = .both) async throws -> AsyncStream<Data> {
         refreshMicrophones()
         
-        // 마이크가 없으면 자동으로 시스템만 모드
+        // Auto switch to system-only if no mic
         let effectiveMode = shouldUseSystemOnly ? .systemOnly : mode
         if effectiveMode != mode {
             print("[MH-AUDIO] No microphone available, switching to system-only mode")
@@ -97,7 +97,7 @@ class AudioCaptureManager: ObservableObject {
     }
     
     private func startMicrophoneCapture() async throws {
-        // 선택된 마이크로 시스템 기본 입력 설정
+        // Set selected mic as system default input
         if let micID = selectedMicrophoneID,
            let device = availableMicrophones.first(where: { $0.uniqueID == micID }) {
             setSystemDefaultInput(deviceUID: micID)
@@ -192,7 +192,7 @@ class AudioCaptureManager: ObservableObject {
         let config = SCStreamConfiguration()
         config.capturesAudio = true
         config.excludesCurrentProcessAudio = true
-        config.sampleRate = 48000  // ScreenCaptureKit 기본값 사용
+        config.sampleRate = 48000  // ScreenCaptureKit default
         config.channelCount = 2
         config.width = 2
         config.height = 2
@@ -225,7 +225,7 @@ private class AudioStreamOutput: NSObject, SCStreamOutput {
         guard type == .audio else { return }
         guard let pcmBuffer = sampleBuffer.toPCMBuffer() else { return }
         
-        // 컨버터 초기화 (최초 1회)
+        // Initialize converter once
         if converter == nil {
             converter = AVAudioConverter(from: pcmBuffer.format, to: targetFormat)
             print("🔊 [Audio] System audio format: \(pcmBuffer.format)")
@@ -233,7 +233,7 @@ private class AudioStreamOutput: NSObject, SCStreamOutput {
         
         guard let converter else { return }
         
-        // 변환
+        // Convert
         let frameCount = AVAudioFrameCount(Double(pcmBuffer.frameLength) * 16000 / pcmBuffer.format.sampleRate)
         guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
         
@@ -272,7 +272,7 @@ private extension CMSampleBuffer {
         
         guard let dataPointer, let floatData = buffer.floatChannelData else { return nil }
         
-        // Float32 데이터 복사
+        // Copy Float32 data
         let srcPtr = UnsafeRawPointer(dataPointer).assumingMemoryBound(to: Float.self)
         let channels = Int(format.channelCount)
         let frames = frameCount
@@ -302,8 +302,8 @@ enum AudioCaptureError: Error, LocalizedError {
     case converterCreationFailed, noDisplayFound
     var errorDescription: String? {
         switch self {
-        case .converterCreationFailed: return "오디오 변환기 생성 실패"
-        case .noDisplayFound: return "디스플레이를 찾을 수 없음"
+        case .converterCreationFailed: return "Failed to create audio converter"
+        case .noDisplayFound: return "No display found"
         }
     }
 }

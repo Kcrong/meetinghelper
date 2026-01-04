@@ -28,7 +28,7 @@ class ChatService: ObservableObject {
         print("✅ [Chat] Bedrock client configured (region: \(region))")
     }
     
-    /// 스트리밍 응답으로 질문에 답변
+    /// Stream response to question
     func ask(question: String, transcription: String, chatHistory: [ChatHistoryItem] = [], historyLimit: Int = 20, systemPromptTemplate: String? = nil) -> AsyncStream<String> {
         AsyncStream { continuation in
             let task = Task {
@@ -75,8 +75,7 @@ class ChatService: ObservableObject {
                 
                 // Add current question
                 if lastRole == "user" && !messages.isEmpty {
-                    // If last message was user, we need to remove it or combine
-                    // to avoid consecutive user messages
+                    // If last message was user, remove to avoid consecutive user messages
                     messages.removeLast()
                 }
                 messages.append(["role": "user", "content": question])
@@ -150,7 +149,7 @@ class ChatService: ObservableObject {
         }
     }
     
-    /// 비스트리밍 (간단한 요청용)
+    /// Non-streaming (for simple requests)
     func askSync(question: String, transcription: String, chatHistory: [ChatHistoryItem] = [], systemPromptTemplate: String? = nil) async -> String {
         var result = ""
         for await chunk in ask(question: question, transcription: transcription, chatHistory: chatHistory, systemPromptTemplate: systemPromptTemplate) {

@@ -140,7 +140,7 @@ struct ContentView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
                         .font(.caption)
-                    TextField("검색", text: $transcriptSearch)
+                    TextField("Search", text: $transcriptSearch)
                         .textFieldStyle(.plain)
                         .font(.caption)
                 }
@@ -155,7 +155,7 @@ struct ContentView: View {
                         .foregroundColor(showTimestamps ? .blue : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help("타임스탬프 표시")
+                .help("Show timestamps")
                 
                 Spacer()
                 
@@ -196,7 +196,7 @@ struct ContentView: View {
                             Image(systemName: "waveform.badge.mic")
                                 .font(.system(size: 40))
                                 .foregroundColor(.secondary.opacity(0.5))
-                            Text("트랜스크립션이 여기에 표시됩니다")
+                            Text("Transcription will appear here")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -284,7 +284,7 @@ struct ContentView: View {
                             Image(systemName: "bubble.left.and.bubble.right")
                                 .font(.system(size: 40))
                                 .foregroundColor(.secondary.opacity(0.5))
-                            Text("AI에게 질문해보세요")
+                            Text("Ask the AI a question")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -330,7 +330,7 @@ struct ContentView: View {
             
             // Input + Stop button
             HStack(spacing: 10) {
-                TextField("질문을 입력하세요...", text: $chatInput)
+                TextField("Enter your question...", text: $chatInput)
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(Color(nsColor: .textBackgroundColor))
@@ -350,7 +350,7 @@ struct ContentView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help("응답 중지")
+                    .help("Stop response")
                 } else {
                     Button(action: sendQuestion) {
                         ZStack {
@@ -376,9 +376,9 @@ struct ContentView: View {
     
     private func quickActionIcon(for label: String) -> String {
         switch label {
-        case "요약": return "doc.text"
-        case "액션 아이템": return "checklist"
-        case "결정 사항": return "checkmark.seal"
+        case "Summary": return "doc.text"
+        case "Action Items": return "checklist"
+        case "Decisions": return "checkmark.seal"
         default: return "sparkle"
         }
     }
@@ -444,9 +444,9 @@ struct ContentView: View {
             
             // Transcribe Settings
             HStack(spacing: 16) {
-                CompactSlider(label: "버퍼", value: $settings.audioBufferSize, options: [1024, 2048, 4096, 8192], labels: ["1K", "2K", "4K", "8K"], tooltip: "낮음: 빠른 반응, 끊김 가능\n높음: 안정적, 지연 증가")
-                CompactSlider(label: "Stability", value: $settings.partialResultsStabilityIndex, options: [0, 1, 2, 3], labels: ["Off", "Low", "Med", "High"], tooltip: "낮음: 빠른 표시, 텍스트 자주 변경\n높음: 안정적 텍스트, 화자분리 정확도 저하")
-                CompactSlider(label: "Sample", value: $settings.transcribeSampleRate, options: [8000, 16000, 32000], labels: ["8K", "16K", "32K"], tooltip: "낮음: 낮은 대역폭, 음질 저하\n높음: 고음질, 처리량 증가")
+                CompactSlider(label: "Buffer", value: $settings.audioBufferSize, options: [1024, 2048, 4096, 8192], labels: ["1K", "2K", "4K", "8K"], tooltip: "Low: Fast response, may stutter\nHigh: Stable, more delay")
+                CompactSlider(label: "Stability", value: $settings.partialResultsStabilityIndex, options: [0, 1, 2, 3], labels: ["Off", "Low", "Med", "High"], tooltip: "Low: Fast display, text changes often\nHigh: Stable text, less accurate speaker ID")
+                CompactSlider(label: "Sample", value: $settings.transcribeSampleRate, options: [8000, 16000, 32000], labels: ["8K", "16K", "32K"], tooltip: "Low: Lower bandwidth, lower quality\nHigh: Better quality, more processing")
             }
             .disabled(store.state == .recording)
             .opacity(store.state == .recording ? 0.5 : 1)
@@ -459,10 +459,10 @@ struct ContentView: View {
     
     private var recordButtonText: String {
         switch store.state {
-        case .preparing: return "준비 중..."
-        case .stopping: return "중지 중..."
-        case .recording: return "녹음 중지"
-        default: return "녹음 시작"
+        case .preparing: return "Preparing..."
+        case .stopping: return "Stopping..."
+        case .recording: return "Stop Recording"
+        default: return "Start Recording"
         }
     }
     
@@ -536,7 +536,7 @@ struct ContentView: View {
                                     } else {
                                         Image(systemName: "checkmark.shield")
                                     }
-                                    Text("연결 테스트")
+                                    Text("Test Connection")
                                 }
                                 .font(.subheadline)
                             }
@@ -574,7 +574,7 @@ struct ContentView: View {
                 
                 SettingsCard(title: "System Prompt", icon: "text.alignleft", iconColor: .purple) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("AI에게 전달되는 기본 지시사항")
+                        Text("Default instructions for the AI")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         TextEditor(text: $settings.systemPrompt)
@@ -590,14 +590,14 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(settings.quickPrompts.indices, id: \.self) { index in
                             HStack(spacing: 10) {
-                                TextField("이름", text: $settings.quickPrompts[index].label)
+                                TextField("Name", text: $settings.quickPrompts[index].label)
                                     .textFieldStyle(.plain)
                                     .padding(8)
                                     .background(Color(nsColor: .textBackgroundColor))
                                     .cornerRadius(6)
                                     .frame(width: 80)
                                     .onChange(of: settings.quickPrompts[index].label) { _ in settings.saveQuickPrompts() }
-                                TextField("프롬프트", text: $settings.quickPrompts[index].prompt)
+                                TextField("Prompt", text: $settings.quickPrompts[index].prompt)
                                     .textFieldStyle(.plain)
                                     .padding(8)
                                     .background(Color(nsColor: .textBackgroundColor))
@@ -672,7 +672,7 @@ struct ContentView: View {
     
     private func startRecording() {
         guard settings.isConfigured else {
-            store.state = .error("AWS 자격 증명을 설정하세요")
+            store.state = .error("Please configure AWS credentials")
             showSettings = true
             return
         }
@@ -681,11 +681,11 @@ struct ContentView: View {
         transcribeService.lastError = nil
         
         Task {
-            // AWS 자격 증명 검증
+            // Validate AWS credentials
             let validationResult = await settings.validateCredentials()
             if !validationResult.success {
                 await MainActor.run {
-                    store.state = .error("AWS 자격 증명 오류: \(validationResult.message)")
+                    store.state = .error("AWS credentials error: \(validationResult.message)")
                     showSettings = true
                 }
                 return
@@ -816,7 +816,7 @@ struct ChatBubble: View {
                                     .foregroundColor(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .help("복사")
+                            .help("Copy")
                         }
                     }
                 }
@@ -1103,7 +1103,7 @@ struct SpeakerChip: View {
         .buttonStyle(.plain)
         .popover(isPresented: $isEditing) {
             VStack(spacing: 10) {
-                Text("화자 이름 변경")
+                Text("Rename Speaker")
                     .font(.subheadline.weight(.semibold))
                 TextField(speaker, text: $editName)
                     .textFieldStyle(.roundedBorder)
@@ -1113,9 +1113,9 @@ struct SpeakerChip: View {
                         isEditing = false
                     }
                 HStack {
-                    Button("취소") { isEditing = false }
+                    Button("Cancel") { isEditing = false }
                         .buttonStyle(.plain)
-                    Button("저장") {
+                    Button("Save") {
                         onRename(editName)
                         isEditing = false
                     }
@@ -1141,7 +1141,7 @@ struct ErrorToast: View {
                 .font(.title3)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text("오류 발생")
+                Text("Error")
                     .font(.subheadline.weight(.semibold))
                 Text(message)
                     .font(.caption)
@@ -1180,10 +1180,10 @@ struct OnboardingOverlay: View {
                     .font(.system(size: 50))
                     .foregroundStyle(.linearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing))
                 
-                Text("AWS 자격 증명 필요")
+                Text("AWS Credentials Required")
                     .font(.title2.bold())
                 
-                Text("Meeting Helper를 사용하려면\nAWS Access Key와 Secret Key가 필요합니다.")
+                Text("To use Meeting Helper,\nyou need AWS Access Key and Secret Key.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -1191,7 +1191,7 @@ struct OnboardingOverlay: View {
                 Button(action: onOpenSettings) {
                     HStack {
                         Image(systemName: "gearshape.fill")
-                        Text("설정으로 이동")
+                        Text("Go to Settings")
                     }
                     .font(.body.weight(.semibold))
                     .foregroundColor(.white)

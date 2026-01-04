@@ -120,7 +120,7 @@ class TranscribeService: ObservableObject {
             
             if text.isEmpty { continue }
             
-            // 화자 라벨 추출
+            // Extract speaker label
             var speakerLabel: String? = nil
             if let items = first.items {
                 let speakers = items.compactMap { $0.speaker }
@@ -169,28 +169,28 @@ class TranscribeService: ObservableObject {
     }
     
     private func languageCode(from language: String) -> TranscribeStreamingClientTypes.LanguageCode {
-        .enUs  // 영어 고정
+        .enUs  // Fixed to English
     }
     
     private func parseTranscribeError(_ error: Error) -> String {
         let errorString = String(describing: error)
         
         if errorString.contains("InvalidSignatureException") || errorString.contains("SignatureDoesNotMatch") {
-            return "AWS 자격 증명이 잘못되었습니다. Access Key와 Secret Key를 확인하세요."
+            return "Invalid AWS credentials. Check Access Key and Secret Key."
         } else if errorString.contains("UnrecognizedClientException") || errorString.contains("InvalidClientTokenId") {
-            return "AWS Access Key가 유효하지 않습니다."
+            return "Invalid AWS Access Key."
         } else if errorString.contains("AccessDeniedException") || errorString.contains("AccessDenied") {
-            return "AWS Transcribe 접근 권한이 없습니다. IAM 정책을 확인하세요."
+            return "No access to AWS Transcribe. Check IAM policy."
         } else if errorString.contains("ExpiredTokenException") {
-            return "AWS 자격 증명이 만료되었습니다."
+            return "AWS credentials expired."
         } else if errorString.contains("ServiceUnavailable") {
-            return "AWS Transcribe 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요."
+            return "AWS Transcribe service unavailable. Try again later."
         } else if errorString.contains("LimitExceededException") {
-            return "동시 스트림 한도를 초과했습니다. 잠시 후 다시 시도하세요."
+            return "Concurrent stream limit exceeded. Try again later."
         } else if errorString.contains("BadRequestException") {
-            return "잘못된 요청입니다. 오디오 설정을 확인하세요."
+            return "Bad request. Check audio settings."
         } else {
-            return "Transcribe 오류: \(error.localizedDescription)"
+            return "Transcribe error: \(error.localizedDescription)"
         }
     }
 }
@@ -208,8 +208,8 @@ enum TranscribeError: Error, LocalizedError {
     
     var errorDescription: String? {
         switch self {
-        case .invalidCredentials: return "AWS 자격 증명이 유효하지 않습니다"
-        case .connectionFailed: return "연결에 실패했습니다"
+        case .invalidCredentials: return "Invalid AWS credentials"
+        case .connectionFailed: return "Connection failed"
         }
     }
 }
