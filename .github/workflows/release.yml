@@ -1,76 +1,30 @@
-name: Build and Release
+name: Release
 
 on:
-  push:
-    branches: [main]
-
-concurrency:
-  group: release
-  cancel-in-progress: false
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: macos-14
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          xcode-version: latest-stable
-      
-      - name: Cache Swift packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            build/SourcePackages
-            ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
-      
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: build/Build
-          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/*.swift', '**/*.xcodeproj/**') }}
-          restore-keys: |
-            ${{ runner.os }}-deriveddata-
-      
-      - name: Build
-        run: |
-          xcodebuild -scheme MeetingHelper \
-            -configuration Release \
-            -derivedDataPath build \
-            -destination 'platform=macOS' \
-            -clonedSourcePackagesDirPath build/SourcePackages \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES
-      
-      - name: Create DMG
-        run: |
-          brew install create-dmg
-          create-dmg \
-            --volname "Meeting Helper" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "MeetingHelper.app" 150 190 \
-            --app-drop-link 450 185 \
-            --no-internet-enable \
-            "MeetingHelper.dmg" \
-            "build/Build/Products/Release/MeetingHelper.app" || true
+          name: MeetingHelper
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
       
       - name: Get version
         id: version
         run: |
-          VERSION=$(date +'%Y.%m.%d')-$(echo ${{ github.sha }} | cut -c1-7)
+          VERSION=$(date +'%Y.%m.%d')-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Update Cask in homebrew-mytap
@@ -103,7 +57,7 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
           body: |
-            Automated build from commit ${{ github.sha }}
+            Automated build from commit ${{ github.event.workflow_run.head_sha }}
             
             ## Installation
             1. Download `MeetingHelper.dmg`
